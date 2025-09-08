@@ -48,11 +48,14 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Copiar arquivos da lib (banco de dados e utilitários)
 COPY --from=builder --chown=nextjs:nodejs /app/lib ./lib
 
+# Criar diretório /data e dar permissões ao usuário nextjs
+RUN mkdir -p /data && chown -R nextjs:nodejs /data
+
 USER nextjs
 
-EXPOSE 4523
+EXPOSE 3145
 
-ENV PORT=4523
+ENV PORT=3145
 ENV HOSTNAME="0.0.0.0"
 
 # Configurar caminho do banco para volume externo

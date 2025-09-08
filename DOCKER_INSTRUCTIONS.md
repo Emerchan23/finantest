@@ -11,10 +11,10 @@
 ```bash
 docker run -d \
   --name erp-br-app \
-  -p 4523:4523 \
+  -p 3145:3145 \
   -v ./data:/data \
-  -e NODE_ENV=production \
-  -e NEXT_PUBLIC_API_URL=http://localhost:4523/api \
+  -e NODE_ENV=development \
+  -e NEXT_PUBLIC_API_URL=http://localhost:3145/api \
   emerchan2025/erp-br:latest
 ```
 
@@ -31,23 +31,23 @@ docker pull emerchan2025/erp-br:latest
 ## Configurações
 
 ### Portas
-- **Aplicação**: 4523
-- **Mapeamento**: Host:4523 -> Container:4523
+- **Aplicação**: 3145
+- **Mapeamento**: Host:3145 -> Container:3145
 
 ### Volumes
 - **Banco de dados**: `./data:/data`
 - **Arquivo SQLite**: `/data/erp.sqlite`
 
 ### Variáveis de ambiente
-- `NODE_ENV=production`
-- `PORT=4523`
+- `NODE_ENV=development`
+- `PORT=3145`
 - `HOSTNAME=0.0.0.0`
 - `DB_PATH=/data/erp.sqlite`
-- `NEXT_PUBLIC_API_URL=http://localhost:4523/api`
+- `NEXT_PUBLIC_API_URL=http://localhost:3145/api`
 
 ## Acesso
 Após executar o container, acesse:
-- **URL**: http://localhost:4523
+- **URL**: http://localhost:3145
 
 ## Logs
 ```bash
