@@ -5,10 +5,12 @@ import fs from 'fs'
 // Configurar caminho do banco para fora do container
 const dbPath = process.env.DB_PATH || join(process.cwd(), 'data', 'erp.sqlite')
 
-// Criar diretório se não existir
-const dbDir = join(process.cwd(), 'data')
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true })
+// Criar diretório apenas se estivermos em desenvolvimento local
+if (!process.env.DB_PATH) {
+  const dbDir = join(process.cwd(), 'data')
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true })
+  }
 }
 
 export const db = new Database(dbPath)
