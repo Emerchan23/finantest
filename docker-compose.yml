@@ -6,7 +6,7 @@ services:
     environment:
       - PORT=4523
       - DB_PATH=/data/erp.sqlite
-      - NODE_ENV=production
+      - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://localhost:4523/api
     ports:
       - "4523:4523"
