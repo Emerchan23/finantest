@@ -49,7 +49,7 @@ npm run start-prod
 # ou
 docker-compose up --build
 ```
-Acesse: http://localhost:4523
+Acesse: http://localhost:3145
 
 ### Comandos Docker
 ```bash
@@ -136,7 +136,7 @@ npm run dev
 ## 🌐 Acesso
 
 - **Frontend**: http://localhost:4522
-- **Backend API**: http://localhost:4523
+- **Backend API**: http://localhost:3145
 
 ## 📊 Estrutura do Projeto
 

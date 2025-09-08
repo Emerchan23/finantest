@@ -264,7 +264,7 @@ function showCompletionMessage() {
   
   log('\n🌐 Acesse o sistema em:', 'cyan');
   log('  http://localhost:3145 (desenvolvimento)', 'bright');
-  log('  http://localhost:4523 (produção)', 'bright');
+  log('  http://localhost:3145 (produção)', 'bright');
   
   log('\n📁 Banco de dados:', 'cyan');
   log('  Localizado em: ./data/erp.sqlite', 'bright');
