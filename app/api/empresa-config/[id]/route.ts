@@ -26,7 +26,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // Configurações SMTP
       smtpHost: empresa.smtp_host || "",
       smtpPort: empresa.smtp_port || 587,
-      smtpSecure: empresa.smtp_secure || false,
+      smtpSecure: Boolean(empresa.smtp_secure),
       smtpUser: empresa.smtp_user || "",
       smtpPassword: empresa.smtp_password || "",
       smtpFromName: empresa.smtp_from_name || "",
@@ -92,31 +92,32 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // Configurações SMTP
     if (body.smtpHost !== undefined) {
       updates.push('smtp_host = ?')
-      values.push(body.smtpHost || null)
+      values.push(body.smtpHost ? String(body.smtpHost) : null)
     }
     if (body.smtpPort !== undefined) {
       updates.push('smtp_port = ?')
-      values.push(body.smtpPort || null)
+      const port = body.smtpPort ? parseInt(String(body.smtpPort)) : null
+      values.push(port)
     }
     if (body.smtpSecure !== undefined) {
       updates.push('smtp_secure = ?')
-      values.push(body.smtpSecure || false)
+      values.push(body.smtpSecure ? 1 : 0)
     }
     if (body.smtpUser !== undefined) {
       updates.push('smtp_user = ?')
-      values.push(body.smtpUser || null)
+      values.push(body.smtpUser ? String(body.smtpUser) : null)
     }
     if (body.smtpPassword !== undefined) {
       updates.push('smtp_password = ?')
-      values.push(body.smtpPassword || null)
+      values.push(body.smtpPassword ? String(body.smtpPassword) : null)
     }
     if (body.smtpFromName !== undefined) {
       updates.push('smtp_from_name = ?')
-      values.push(body.smtpFromName || null)
+      values.push(body.smtpFromName ? String(body.smtpFromName) : null)
     }
     if (body.smtpFromEmail !== undefined) {
       updates.push('smtp_from_email = ?')
-      values.push(body.smtpFromEmail || null)
+      values.push(body.smtpFromEmail ? String(body.smtpFromEmail) : null)
     }
     
     if (updates.length === 0) {
