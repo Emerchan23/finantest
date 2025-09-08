@@ -9,16 +9,17 @@ def test_create_new_company_with_valid_data():
         "Content-Type": "application/json"
     }
     payload = {
-        "nome": "Empresa Teste API"
+        "nome": "Empresa Teste TC002"
     }
-    
-    response = requests.post(url, json=payload, headers=headers, timeout=TIMEOUT)
-    
-    assert response.status_code == 200, f"Expected status code 200 but got {response.status_code}"
-    
-    json_response = response.json()
-    assert isinstance(json_response, dict), f"Response JSON should be a dictionary but got {type(json_response)}"
-    assert "id" in json_response, "Response JSON does not contain 'id'"
-    assert isinstance(json_response["id"], str) and json_response["id"].strip() != "", "'id' should be a non-empty string"
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=TIMEOUT)
+        response.raise_for_status()
+        data = response.json()
+        assert isinstance(data, dict), "Response is not a JSON object"
+        assert "id" in data, "Response JSON does not contain 'id'"
+        company_id = data["id"]
+        assert isinstance(company_id, str) and company_id.strip() != "", "Company ID is not a valid non-empty string"
+    except requests.exceptions.RequestException as e:
+        assert False, f"Request failed: {e}"
 
 test_create_new_company_with_valid_data()

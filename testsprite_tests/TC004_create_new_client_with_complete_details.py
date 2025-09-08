@@ -1,33 +1,35 @@
 import requests
 
 BASE_URL = "http://localhost:3145"
-CLIENTS_ENDPOINT = f"{BASE_URL}/api/clientes"
-HEADERS = {
-    "Content-Type": "application/json"
-}
 TIMEOUT = 30
+HEADERS = {"Content-Type": "application/json"}
 
-def test_tc004_create_new_client_complete_details():
+def test_create_new_client_with_complete_details():
+    url = f"{BASE_URL}/api/clientes"
     client_data = {
         "nome": "Cliente Teste Completo",
         "documento": "12345678901",
-        "endereco": "Rua Exemplo, 123, São Paulo, SP",
-        "telefone": "+55 11 91234-5678",
+        "endereco": "Rua Exemplo, 123, Bairro Teste, Cidade Y",
+        "telefone": "+5511999998888",
         "email": "cliente.teste@example.com"
     }
-
+    response = None
     try:
-        response = requests.post(CLIENTS_ENDPOINT, json=client_data, headers=HEADERS, timeout=TIMEOUT)
-        response.raise_for_status()
-    except requests.RequestException as e:
-        assert False, f"Request to create client failed: {e}"
+        response = requests.post(url, json=client_data, headers=HEADERS, timeout=TIMEOUT)
+        assert response.status_code == 200, f"Unexpected status code: {response.status_code}"
+        json_resp = response.json()
+        assert "id" in json_resp, "Response JSON does not contain 'id'"
+        assert isinstance(json_resp["id"], str) and len(json_resp["id"]) > 0, "Invalid 'id' value"
+    finally:
+        if response and response.status_code == 200:
+            client_id = response.json().get("id")
+            if client_id:
+                # Attempt to delete created client to avoid test pollution
+                delete_url = f"{BASE_URL}/api/clientes/{client_id}"
+                try:
+                    del_resp = requests.delete(delete_url, headers=HEADERS, timeout=TIMEOUT)
+                    assert del_resp.status_code in (200, 204), "Failed to delete test client after test"
+                except Exception:
+                    pass
 
-    try:
-        json_response = response.json()
-    except ValueError:
-        assert False, "Response is not valid JSON"
-
-    assert "id" in json_response, "Response JSON does not contain 'id'"
-    assert isinstance(json_response["id"], str) and len(json_response["id"]) > 0, "Client 'id' is not a valid non-empty string"
-
-test_tc004_create_new_client_complete_details()
+test_create_new_client_with_complete_details()

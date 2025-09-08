@@ -3,89 +3,71 @@ import uuid
 
 BASE_URL = "http://localhost:3145"
 TIMEOUT = 30
-HEADERS = {"Content-Type": "application/json"}
 
-def create_company():
-    data = {"nome": f"Test Company {uuid.uuid4()}"}
-    resp = requests.post(f"{BASE_URL}/api/empresas", json=data, headers=HEADERS, timeout=TIMEOUT)
-    resp.raise_for_status()
-    company_id = resp.json().get("id")
-    assert company_id, "Failed to create company"
-    return company_id
+def test_create_new_sale_with_linked_client_and_product():
+    headers = {"Content-Type": "application/json"}
 
-def delete_company(company_id):
-    requests.delete(f"{BASE_URL}/api/empresas/{company_id}", timeout=TIMEOUT)
+    # Step 1. Create a new company
+    company_payload = {"nome": f"Test Company {uuid.uuid4()}"}
+    company_response = requests.post(f"{BASE_URL}/api/empresas", json=company_payload, headers=headers, timeout=TIMEOUT)
+    assert company_response.status_code == 200, f"Failed to create company: {company_response.text}"
+    company_id = company_response.json().get("id")
+    assert company_id, "Company ID not returned"
 
-def create_client():
-    data = {
+    # Step 2. Create a new client linked to the company
+    client_payload = {
         "nome": f"Test Client {uuid.uuid4()}",
         "documento": "12345678900",
         "endereco": "Rua Teste, 123",
-        "telefone": "+5511999999999",
-        "email": f"testclient{uuid.uuid4().hex[:6]}@example.com"
+        "telefone": "11999999999",
+        "email": f"client{uuid.uuid4()}@example.com"
     }
-    resp = requests.post(f"{BASE_URL}/api/clientes", json=data, headers=HEADERS, timeout=TIMEOUT)
-    resp.raise_for_status()
-    client_id = resp.json().get("id")
-    assert client_id, "Failed to create client"
-    return client_id
+    client_response = requests.post(f"{BASE_URL}/api/clientes", json=client_payload, headers=headers, timeout=TIMEOUT)
+    assert client_response.status_code == 200, f"Failed to create client: {client_response.text}"
+    client_id = client_response.json().get("id")
+    assert client_id, "Client ID not returned"
 
-def delete_client(client_id):
-    requests.delete(f"{BASE_URL}/api/clientes/{client_id}", timeout=TIMEOUT)
-
-def create_product():
-    data = {
+    # Step 3. Create a new product linked to the company
+    product_payload = {
         "nome": f"Test Product {uuid.uuid4()}",
-        "preco": 99.99,
+        "preco": 99.90,
         "categoria": "Test Category"
     }
-    resp = requests.post(f"{BASE_URL}/api/produtos", json=data, headers=HEADERS, timeout=TIMEOUT)
-    resp.raise_for_status()
-    product_id = resp.json().get("id")
-    assert product_id, "Failed to create product"
-    return product_id
+    product_response = requests.post(f"{BASE_URL}/api/produtos", json=product_payload, headers=headers, timeout=TIMEOUT)
+    assert product_response.status_code == 200, f"Failed to create product: {product_response.text}"
+    product_id = product_response.json().get("id")
+    assert product_id, "Product ID not returned"
 
-def delete_product(product_id):
-    requests.delete(f"{BASE_URL}/api/produtos/{product_id}", timeout=TIMEOUT)
+    # Step 4. Create a new sale with linked client id, product id, quantity, unit price, and company id
+    sale_payload = {
+        "cliente_id": client_id,
+        "produto_id": product_id,
+        "quantidade": 3,
+        "preco_unitario": 99.90,
+        "empresa_id": company_id
+    }
 
-def delete_sale(sale_id):
-    requests.delete(f"{BASE_URL}/api/vendas/{sale_id}", timeout=TIMEOUT)
-
-def test_create_new_sale_with_linked_client_and_product():
-    company_id = None
-    client_id = None
-    product_id = None
-    sale_id = None
     try:
-        # Create company
-        company_id = create_company()
+        sale_response = requests.post(f"{BASE_URL}/api/vendas", json=sale_payload, headers=headers, timeout=TIMEOUT)
+        assert sale_response.status_code == 200, f"Failed to create sale: {sale_response.text}"
+        sale_id = sale_response.json().get("id")
+        assert sale_id, "Sale ID not returned"
 
-        # Create client
-        client_id = create_client()
-
-        # Create product
-        product_id = create_product()
-
-        sale_data = {
-            "cliente_id": client_id,
-            "produto_id": product_id,
-            "quantidade": 2,
-            "preco_unitario": 99.99,
-            "empresa_id": company_id
-        }
-        response = requests.post(f"{BASE_URL}/api/vendas", json=sale_data, headers=HEADERS, timeout=TIMEOUT)
-        assert response.status_code == 200, f"Unexpected status code: {response.status_code}"
-        resp_json = response.json()
-        sale_id = resp_json.get("id")
-        assert sale_id, "Response JSON does not contain sale id"
     finally:
-        if sale_id:
-            delete_sale(sale_id)
+        # Cleanup created sale (if created)
+        if 'sale_id' in locals() and sale_id:
+            requests.delete(f"{BASE_URL}/api/vendas/{sale_id}", headers=headers, timeout=TIMEOUT)
+
+        # Cleanup created client
         if client_id:
-            delete_client(client_id)
+            requests.delete(f"{BASE_URL}/api/clientes/{client_id}", headers=headers, timeout=TIMEOUT)
+
+        # Cleanup created product
         if product_id:
-            delete_product(product_id)
+            requests.delete(f"{BASE_URL}/api/produtos/{product_id}", headers=headers, timeout=TIMEOUT)
+
+        # Cleanup created company
         if company_id:
-            delete_company(company_id)
+            requests.delete(f"{BASE_URL}/api/empresas/{company_id}", headers=headers, timeout=TIMEOUT)
 
 test_create_new_sale_with_linked_client_and_product()

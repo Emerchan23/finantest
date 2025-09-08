@@ -1,0 +1,2 @@
+INSERT OR REPLACE INTO user_prefs (userId, json, created_at, updated_at) 
+VALUES ('default', '{"currentEmpresaId": "e562f3ab-4f87-479b-aae5-ac2d250d227d", "theme": "light", "language": "pt-BR"}', datetime('now'), datetime('now'));

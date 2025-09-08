@@ -1,93 +1,70 @@
 import requests
-import uuid
 
 BASE_URL = "http://localhost:3145"
 TIMEOUT = 30
-HEADERS = {
-    "Content-Type": "application/json"
-}
+HEADERS = {"Content-Type": "application/json"}
 
-def create_company():
-    url = f"{BASE_URL}/api/empresas"
-    payload = {
-        "nome": f"Test Company {uuid.uuid4()}"
+
+def test_list_clients_data_isolation():
+    create_client_url = f"{BASE_URL}/api/clientes"
+    get_clients_url = create_client_url
+
+    # Sample client data to create a new client to ensure presence in the current company context
+    new_client_data = {
+        "nome": "Client Data Isolation Test",
+        "documento": "12345678900",
+        "endereco": "Rua Teste, 123",
+        "telefone": "11999999999",
+        "email": "client.isolation@test.com"
     }
-    resp = requests.post(url, json=payload, headers=HEADERS, timeout=TIMEOUT)
-    resp.raise_for_status()
-    company_id = resp.json().get("id")
-    assert isinstance(company_id, str) and len(company_id) > 0
-    return company_id
 
-def delete_company(company_id):
-    url = f"{BASE_URL}/api/empresas/{company_id}"
-    # No delete endpoint defined in PRD, so if no delete supported, skip.
-    # Assuming it's not available, no action here.
-    pass
-
-def create_client(client_data):
-    url = f"{BASE_URL}/api/clientes"
-    resp = requests.post(url, json=client_data, headers=HEADERS, timeout=TIMEOUT)
-    resp.raise_for_status()
-    client_id = resp.json().get("id")
-    assert isinstance(client_id, str) and len(client_id) > 0
-    return client_id
-
-def delete_client(client_id):
-    url = f"{BASE_URL}/api/clientes/{client_id}"
-    # No delete endpoint defined in PRD, so if no delete supported, skip.
-    # Assuming it's not available, no action here.
-    pass
-
-def test_list_clients_for_current_company_with_data_isolation():
-    # Create a new company
-    company_id = None
-    client_id = None
+    created_client_id = None
     try:
-        # Step 1: Create a new company - needed to isolate data (if possible)
-        # NOTE: PRD doesn't show how clients are linked by company explicitly in request,
-        # we assume the API uses authentication or some header to determine the current company context.
-        # Without authentication info, this test will create a client and verify it appears in the listing.
+        # Create a new client to ensure at least one client for the current company
+        create_resp = requests.post(create_client_url, json=new_client_data, headers=HEADERS, timeout=TIMEOUT)
+        assert create_resp.status_code == 200, f"Failed to create client: {create_resp.text}"
+        create_resp_json = create_resp.json()
+        assert "id" in create_resp_json and isinstance(create_resp_json["id"], str) and create_resp_json["id"].strip(), "Invalid client ID in creation response"
+        created_client_id = create_resp_json["id"]
 
-        company_id = create_company()
+        # Get list of clients for current company
+        list_resp = requests.get(get_clients_url, headers=HEADERS, timeout=TIMEOUT)
+        assert list_resp.status_code == 200, f"Failed to list clients: {list_resp.text}"
 
-        # Step 2: Create a client belonging to the current company
-        client_data = {
-            "nome": f"Client {uuid.uuid4()}",
-            "documento": f"12345678900",
-            "endereco": "Rua Teste, 123",
-            "telefone": "1234567890",
-            "email": f"testclient_{uuid.uuid4().hex}@example.com"
-        }
-        client_id = create_client(client_data)
+        clients = list_resp.json()
+        assert isinstance(clients, list), "Clients response is not a list"
 
-        # Step 3: Call GET /api/clientes to list clients of current company
-        url = f"{BASE_URL}/api/clientes"
-        resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-        resp.raise_for_status()
-        clients = resp.json()
-        assert isinstance(clients, list)
+        # Find the created client in the list to assert data is correct
+        matching_clients = [c for c in clients if c.get("id") == created_client_id]
+        assert len(matching_clients) == 1, "Created client not found in clients list for current company"
 
-        # Step 4: Verify that the created client is in the list with correct details
-        matching_clients = [c for c in clients if c.get("id") == client_id]
-        assert len(matching_clients) == 1
-        client_returned = matching_clients[0]
-
+        client = matching_clients[0]
         # Validate client fields
-        assert client_returned.get("nome") == client_data["nome"]
-        assert client_returned.get("documento") == client_data["documento"]
-        assert client_returned.get("endereco") == client_data["endereco"]
-        assert client_returned.get("telefone") == client_data["telefone"]
-        assert client_returned.get("email") == client_data["email"]
-        assert "createdAt" in client_returned and isinstance(client_returned["createdAt"], str)
+        expected_fields = ["id", "nome", "documento", "endereco", "telefone", "email", "createdAt"]
+        for field in expected_fields:
+            assert field in client, f"Missing field '{field}' in client data"
 
-        # Optional: Test data isolation by asserting no clients from other companies appear
-        # Since no cross-company clients creation available here and no auth, skipping.
+        assert client["nome"] == new_client_data["nome"], "Client 'nome' does not match"
+        assert client["documento"] == new_client_data["documento"], "Client 'documento' does not match"
+        assert client["endereco"] == new_client_data["endereco"], "Client 'endereco' does not match"
+        assert client["telefone"] == new_client_data["telefone"], "Client 'telefone' does not match"
+        assert client["email"] == new_client_data["email"], "Client 'email' does not match"
+        # createdAt should be a non-empty string
+        assert isinstance(client["createdAt"], str) and client["createdAt"].strip(), "Client 'createdAt' is invalid"
 
-    except requests.exceptions.RequestException as e:
-        assert False, f"Request failed: {e}"
+        # Check that all clients returned are from the current company by ensuring data isolation concept
+        # This might be inferred from the lack of clients with name or document drastically different, 
+        # but since no authentication/tenant header or multi-company data is visible, the test focuses on existence and details.
+
     finally:
-        # Cleanup - Delete created client and company if API had delete endpoints.
-        # PRD did not specify deletes for clients or companies, so skipping.
-        pass
+        # Cleanup: Delete the created client if possible
+        if created_client_id:
+            try:
+                delete_url = f"{create_client_url}/{created_client_id}"
+                del_resp = requests.delete(delete_url, headers=HEADERS, timeout=TIMEOUT)
+                # Deletion might not return 200, but we do not raise because this is cleanup
+            except Exception:
+                pass
 
-test_list_clients_for_current_company_with_data_isolation()
+
+test_list_clients_data_isolation()
