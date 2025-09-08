@@ -244,6 +244,57 @@ export default function ConfiguracoesPage() {
     }
   }
 
+  const [testingConnection, setTestingConnection] = useState(false)
+
+  const handleTestarConexaoSMTP = async () => {
+    try {
+      setTestingConnection(true)
+      
+      if (!currentEmpresa) {
+        toast({
+          title: "Erro",
+          description: "Nenhuma empresa selecionada",
+          variant: "destructive",
+        })
+        return
+      }
+      
+      const response = await fetch('/api/email/test-connection', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          empresaId: currentEmpresa.id
+        })
+      })
+      
+      const result = await response.json()
+      
+      if (response.ok && result.success) {
+        toast({
+          title: "Sucesso",
+          description: result.message || "Conexão SMTP testada com sucesso!",
+        })
+      } else {
+        toast({
+          title: "Erro na Conexão",
+          description: result.details || result.error || "Erro ao testar conexão SMTP",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Erro ao testar conexão SMTP:', error)
+      toast({
+        title: "Erro",
+        description: "Erro ao testar conexão SMTP",
+        variant: "destructive",
+      })
+    } finally {
+      setTestingConnection(false)
+    }
+  }
+
   const handleExport = async () => {
     try {
       const backup = await getBackup()
@@ -765,8 +816,15 @@ export default function ConfiguracoesPage() {
               />
               <Label htmlFor="smtpSecure">Usar SSL/TLS (porta 465)</Label>
             </div>
-            <div className="mt-4">
+            <div className="flex gap-2 mt-4">
               <Button onClick={handleSalvarSMTP}>Salvar Configurações SMTP</Button>
+              <Button 
+                variant="outline" 
+                onClick={handleTestarConexaoSMTP}
+                disabled={testingConnection}
+              >
+                {testingConnection ? "Testando..." : "Testar Conexão"}
+              </Button>
             </div>
           </CardContent>
         </Card>

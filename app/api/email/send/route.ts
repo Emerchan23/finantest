@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Criar transporter do nodemailer
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       host: smtpHost,
       port: smtpPort || 587,
       secure: smtpSecure || false,
