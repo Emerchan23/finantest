@@ -12,6 +12,7 @@
     "start-dev": "node start-dev.js",
     "start-prod": "node start-prod.js",
     "setup": "npm run install-system && npm run build",
+    "diagnose": "node scripts/diagnose.js",
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",

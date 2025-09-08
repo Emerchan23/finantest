@@ -49,6 +49,72 @@ npm run start-prod
 # ou
 docker-compose up --build
 ```
+
+## 🔧 Diagnóstico e Solução de Problemas
+
+### Script de Diagnóstico
+Antes de usar o sistema, execute o diagnóstico para verificar se tudo está funcionando:
+
+```bash
+npm run diagnose
+```
+
+Este script verifica:
+- ✅ Permissões de banco de dados
+- ✅ Conectividade SQLite
+- ✅ Configuração de rede
+- ✅ IPs disponíveis para acesso externo
+- ✅ Arquivos importantes do projeto
+
+### 🌐 Acesso de Outros Computadores/IPs
+
+O sistema agora funciona corretamente quando acessado de outros IPs na rede:
+
+**URLs de Acesso:**
+- Local: `http://localhost:3145`
+- Rede local: `http://[SEU-IP]:3145`
+- Exemplo: `http://192.168.1.10:3145`
+
+**Para descobrir seus IPs disponíveis:**
+```bash
+npm run diagnose
+```
+
+### 🗄️ Problemas de Banco de Dados
+
+**Sintomas comuns:**
+- ❌ Erro ao salvar dados
+- ❌ "Sem acesso ao banco de dados"
+- ❌ Dados não persistem após reiniciar
+
+**Soluções:**
+
+1. **Execute o diagnóstico:**
+   ```bash
+   npm run diagnose
+   ```
+
+2. **Verifique permissões:**
+   - Execute como administrador (Windows)
+   - Verifique permissões da pasta `./data/`
+
+3. **Configure caminho personalizado:**
+   ```bash
+   # Windows
+   set DB_PATH=C:\caminho\personalizado\erp.sqlite
+   npm run dev
+   
+   # Linux/Mac
+   export DB_PATH=/caminho/personalizado/erp.sqlite
+   npm run dev
+   ```
+
+4. **Docker - Volume externo:**
+   ```yaml
+   # docker-compose.yml já configurado
+   volumes:
+     - ./data:/data  # Dados ficam em ./data/ no host
+   ```
 Acesse: http://localhost:3145
 
 ### Comandos Docker

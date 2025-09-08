@@ -1,19 +1,51 @@
 import Database from 'better-sqlite3'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import fs from 'fs'
 
 // Configurar caminho do banco para fora do container
 const dbPath = process.env.DB_PATH || join(process.cwd(), 'data', 'erp.sqlite')
 
-// Criar diretório apenas se estivermos em desenvolvimento local
-if (!process.env.DB_PATH) {
-  const dbDir = join(process.cwd(), 'data')
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true })
+// Função para validar acesso ao banco de dados
+function validateDatabaseAccess(path: string): boolean {
+  try {
+    const dir = dirname(path)
+    
+    // Verificar se diretório existe ou pode ser criado
+    if (!fs.existsSync(dir)) {
+      console.log(`📁 Criando diretório do banco: ${dir}`)
+      fs.mkdirSync(dir, { recursive: true })
+    }
+    
+    // Testar permissões de escrita
+    const testFile = join(dir, '.write-test')
+    fs.writeFileSync(testFile, 'test')
+    fs.unlinkSync(testFile)
+    
+    console.log(`✅ Banco de dados validado: ${path}`)
+    return true
+  } catch (error) {
+    console.error(`❌ Erro de acesso ao banco de dados: ${path}`)
+    console.error(`❌ Detalhes do erro:`, error)
+    return false
   }
 }
 
-export const db = new Database(dbPath)
+// Validar acesso antes de criar conexão
+if (!validateDatabaseAccess(dbPath)) {
+  throw new Error(`❌ Sem permissão para acessar banco de dados: ${dbPath}. Verifique as permissões do diretório.`)
+}
+
+// Criar conexão com o banco
+let db: Database.Database
+try {
+  db = new Database(dbPath)
+  console.log(`✅ Conexão com banco estabelecida: ${dbPath}`)
+} catch (error) {
+  console.error(`❌ Erro ao conectar com banco:`, error)
+  throw new Error(`❌ Falha na conexão com banco de dados: ${dbPath}`)
+}
+
+export { db }
 
 // Configurar WAL mode para melhor performance
 db.pragma('journal_mode = WAL')

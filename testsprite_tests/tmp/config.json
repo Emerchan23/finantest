@@ -1,0 +1,17 @@
+{
+  "status": "commited",
+  "type": "backend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:3145",
+  "backendAuthType": "public",
+  "executionArgs": {
+    "projectName": "erp-br - Copia - Copia",
+    "projectPath": "c:\\Users\\skile\\OneDrive\\Área de Trabalho\\SISTEMAS EM PRODUÇÃO\\gestao vendas - Copia (3) - Copia\\erp-br - Copia - Copia",
+    "testIds": [],
+    "additionalInstruction": "",
+    "envs": {
+      "API_KEY": "sk-user-r-PGJDfj69c3OgK_yD3skNZ1hZK3leY_Lz7B8rN5w1CE1TNrDiQPwdVXfjixurvSP8WqF5vmY7xKea6XZi14uPtFCCU1e2kmcYOSnF7-uyNq51JhNSz0drq0UgS4Vseijtk"
+    }
+  },
+  "proxy": "http://19bab93f-0cc3-48ed-800e-574322f6ddaa:eBYXWo3obvLrgVfqPfBdJB6KhVwtF3gb@tun.testsprite.com:8080"
+}

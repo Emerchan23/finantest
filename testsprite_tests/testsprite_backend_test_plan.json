@@ -1,0 +1,52 @@
+[
+  {
+    "id": "TC001",
+    "title": "health check api returns application status and timestamp",
+    "description": "Verify that the GET /api/health endpoint returns a 200 status with a JSON object containing 'ok' as true and a valid timestamp string indicating the application is healthy."
+  },
+  {
+    "id": "TC002",
+    "title": "create new company with valid data",
+    "description": "Test the POST /api/empresas endpoint to create a new company by sending valid company name data and verify the response contains a unique company id."
+  },
+  {
+    "id": "TC003",
+    "title": "list all companies for multi tenant support",
+    "description": "Test the GET /api/empresas endpoint to retrieve a list of all companies ensuring the response is an array of company objects with id, name, and created_at fields."
+  },
+  {
+    "id": "TC004",
+    "title": "create new client with complete details",
+    "description": "Test the POST /api/clientes endpoint to create a new client with all required fields (name, document, address, phone, email) and verify the response returns the new client id."
+  },
+  {
+    "id": "TC005",
+    "title": "list clients for current company with data isolation",
+    "description": "Test the GET /api/clientes endpoint to list clients belonging only to the current company ensuring data isolation and correct client details in the response."
+  },
+  {
+    "id": "TC006",
+    "title": "create new product with valid attributes",
+    "description": "Test the POST /api/produtos endpoint to create a new product with name, price, and category and verify the response returns the product id."
+  },
+  {
+    "id": "TC007",
+    "title": "list products for current company with correct details",
+    "description": "Test the GET /api/produtos endpoint to retrieve products for the current company ensuring the response includes product id, name, price, category, and creation date."
+  },
+  {
+    "id": "TC008",
+    "title": "create new sale with linked client and product",
+    "description": "Test the POST /api/vendas endpoint to create a new sale by providing client id, product id, quantity, unit price, and company id and verify the response returns the sale id."
+  },
+  {
+    "id": "TC009",
+    "title": "list sales with related client product and company data",
+    "description": "Test the GET /api/vendas endpoint to list sales ensuring each sale includes related client name, product name, company name, and correct sale details."
+  },
+  {
+    "id": "TC010",
+    "title": "send email with valid smtp configuration",
+    "description": "Test the POST /api/email/send endpoint to send an email with valid 'to', 'subject', and 'html' content and verify the response confirms successful email sending."
+  }
+]
