@@ -37,7 +37,8 @@ EXPOSE 3000
 # Definir variáveis de ambiente
 ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV DB_PATH="/app/data/erp.sqlite"
+ENV DB_PATH="/data/erp.sqlite"
+ENV PORT=3000
 
 # Comando para iniciar aplicação
-CMD ["npm", "run", "dev"]
+CMD ["node", "server.js"]
