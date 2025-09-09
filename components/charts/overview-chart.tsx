@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import {
   LineChart as RLineChart,
   Line,
@@ -23,6 +24,35 @@ export function OverviewChart({
   data?: Point[]
   type?: "bar" | "line"
 }) {
+  // Garantir que data seja sempre um array válido
+  const safeData = React.useMemo(() => {
+    console.log('OverviewChart received data:', data, 'type:', typeof data, 'isArray:', Array.isArray(data))
+    
+    // Se data for undefined, null ou não for um array, retornar array vazio
+    if (!data || !Array.isArray(data)) {
+      console.log('Data is not a valid array, returning empty array')
+      return []
+    }
+    
+    // Validar cada item do array
+    const validData = data.filter(item => 
+      item && 
+      typeof item === 'object' && 
+      typeof item.name === 'string'
+    )
+    
+    console.log('Filtered valid data:', validData)
+    return validData
+  }, [data])
+  
+  // Se não há dados válidos, mostrar mensagem
+  if (safeData.length === 0) {
+    return (
+      <div className="h-64 w-full flex items-center justify-center text-muted-foreground">
+        Nenhum dado disponível para exibir
+      </div>
+    )
+  }
   // Formatador customizado para o tooltip
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -54,7 +84,7 @@ export function OverviewChart({
     <div className="h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">
         {type === "bar" ? (
-          <RBarChart data={data}>
+          <RBarChart data={safeData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="name" />
             <YAxis tickFormatter={formatYAxis} />
@@ -67,7 +97,7 @@ export function OverviewChart({
             <Bar dataKey="impostos" fill="hsl(24 95% 53%)" name="Impostos" />
           </RBarChart>
         ) : (
-          <RLineChart data={data}>
+          <RLineChart data={safeData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="name" />
             <YAxis tickFormatter={formatYAxis} />

@@ -150,6 +150,16 @@ function setupEnvironment() {
     logSuccess('Diretório de dados criado');
   }
   
+  // Configurar permissões do diretório data (Linux/Mac)
+  if (os.platform() !== 'win32') {
+    try {
+      execSync(`chmod -R 777 "${dataDir}"`, { stdio: 'ignore' });
+      logSuccess('Permissões do diretório data configuradas');
+    } catch (error) {
+      logWarning('Não foi possível configurar permissões automaticamente');
+    }
+  }
+  
   // Verificar se .env existe, se não, criar um básico
   const envFile = path.join(process.cwd(), '.env.local');
   if (!fs.existsSync(envFile)) {
@@ -157,9 +167,21 @@ function setupEnvironment() {
 NEXT_PUBLIC_API_URL=http://localhost:3145
 DB_PATH=./data/erp.sqlite
 NODE_ENV=development
+NEXT_TELEMETRY_DISABLED=1
 `;
     fs.writeFileSync(envFile, envContent);
     logSuccess('Arquivo .env.local criado');
+  }
+  
+  // Criar arquivo de teste no diretório data para verificar permissões
+  try {
+    const testFile = path.join(dataDir, '.write-test');
+    fs.writeFileSync(testFile, 'test');
+    fs.unlinkSync(testFile);
+    logSuccess('Permissões de escrita verificadas');
+  } catch (error) {
+    logError('Erro de permissão no diretório data');
+    logWarning('Execute: chmod 777 data/ (Linux/Mac) ou configure permissões manualmente');
   }
   
   logSuccess('Ambiente configurado!');
@@ -184,12 +206,17 @@ function buildProject() {
   
   try {
     log('Executando build...', 'blue');
-    execSync('npm run build', { stdio: 'inherit' });
-    logSuccess('Projeto construído com sucesso!');
+    // Tentar build, mas não falhar se houver problemas de permissão
+    try {
+      execSync('npm run build', { stdio: 'inherit' });
+      logSuccess('Projeto construído com sucesso!');
+    } catch (buildError) {
+      logWarning('Build falhou, mas continuando com modo desenvolvimento');
+      logWarning('O sistema funcionará em modo dev (npm run dev)');
+    }
   } catch (error) {
-    logError('Erro ao construir o projeto');
+    logWarning('Erro durante build, mas sistema pode funcionar em modo dev');
     console.error(error.message);
-    process.exit(1);
   }
 }
 

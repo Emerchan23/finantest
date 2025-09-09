@@ -156,6 +156,67 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS linhas_venda (
+    id TEXT PRIMARY KEY,
+    companyId TEXT,
+    dataPedido TEXT NOT NULL,
+    numeroOF TEXT,
+    numeroDispensa TEXT,
+    cliente TEXT,
+    produto TEXT,
+    modalidade TEXT,
+    valorVenda REAL NOT NULL DEFAULT 0,
+    taxaCapitalPerc REAL NOT NULL DEFAULT 0,
+    taxaCapitalVl REAL NOT NULL DEFAULT 0,
+    taxaImpostoPerc REAL NOT NULL DEFAULT 0,
+    taxaImpostoVl REAL NOT NULL DEFAULT 0,
+    custoMercadoria REAL NOT NULL DEFAULT 0,
+    somaCustoFinal REAL NOT NULL DEFAULT 0,
+    lucroValor REAL NOT NULL DEFAULT 0,
+    lucroPerc REAL NOT NULL DEFAULT 0,
+    dataRecebimento TEXT,
+    paymentStatus TEXT NOT NULL DEFAULT 'pendente',
+    settlementStatus TEXT,
+    acertoId TEXT,
+    cor TEXT,
+    createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS outros_negocios (
+    id TEXT PRIMARY KEY,
+    tipo TEXT NOT NULL CHECK (tipo IN ('receita', 'despesa')),
+    valor REAL NOT NULL,
+    descricao TEXT,
+    categoria TEXT,
+    cliente_id TEXT,
+    data_transacao TEXT NOT NULL,
+    status TEXT DEFAULT 'ativo',
+    juros_ativo BOOLEAN DEFAULT 0,
+    juros_mes_percent REAL DEFAULT 0,
+    multa_ativa BOOLEAN DEFAULT 0,
+    multa_percent REAL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS acertos (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    titulo TEXT,
+    observacoes TEXT,
+    linhaIds TEXT,
+    totalLucro REAL DEFAULT 0,
+    totalDespesasRateio REAL DEFAULT 0,
+    totalDespesasIndividuais REAL DEFAULT 0,
+    totalLiquidoDistribuivel REAL DEFAULT 0,
+    distribuicoes TEXT,
+    despesas TEXT,
+    ultimoRecebimentoBanco TEXT,
+    status TEXT DEFAULT 'aberto',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Ignorar erros se as colunas já existirem

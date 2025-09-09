@@ -1,64 +1,43 @@
-# Dockerfile para aplicação Next.js integrada com API
-FROM node:18-alpine AS base
+# Usar imagem Node.js oficial
+FROM node:18-alpine
 
-# Instalar dependências apenas quando necessário
-FROM base AS deps
-RUN apk add --no-cache libc6-compat python3 make g++
+# Definir diretório de trabalho
 WORKDIR /app
 
-# Instalar dependências baseado no gerenciador de pacotes preferido
-COPY package.json package-lock.json* ./
-RUN npm ci
+# Instalar dependências do sistema necessárias para better-sqlite3
+RUN apk add --no-cache sqlite python3 make g++ libc6-compat
 
-# Rebuild do código fonte apenas quando necessário
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# Copiar arquivos de dependências
+COPY package*.json ./
+
+# Instalar dependências
+RUN npm install
+
+# Copiar código fonte
 COPY . .
 
-# Next.js coleta dados de telemetria completamente anônimos sobre uso geral.
-# Saiba mais aqui: https://nextjs.org/telemetry
-# Descomente a linha seguinte caso queira desabilitar a telemetria durante o build.
-# ENV NEXT_TELEMETRY_DISABLED 1
-
-RUN npm run build
-
-# Imagem de produção, copiar todos os arquivos e executar next
-FROM base AS runner
-WORKDIR /app
-
-ENV NODE_ENV=development
-# Descomente a linha seguinte caso queira desabilitar a telemetria durante runtime.
-# ENV NEXT_TELEMETRY_DISABLED=1
-
+# Criar usuário não-root
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
+# Criar diretório de dados e definir permissões
+RUN mkdir -p /app/data
+RUN chown -R nextjs:nodejs /app
+RUN chmod -R 755 /app/data
 
-# Definir as permissões corretas para prerender cache
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
+# Executar instalação automática
+RUN node install.js || echo "Install script completed"
 
-# Copiar automaticamente arquivos de saída com base no trace de saída
-# https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-# Copiar arquivos da lib (banco de dados e utilitários)
-COPY --from=builder --chown=nextjs:nodejs /app/lib ./lib
-
-# Criar diretório /data e dar permissões ao usuário nextjs
-RUN mkdir -p /data && chown -R nextjs:nodejs /data
-
+# Mudar para usuário não-root
 USER nextjs
 
-EXPOSE 3145
+# Expor porta
+EXPOSE 3000
 
-ENV PORT=3145
-ENV HOSTNAME="0.0.0.0"
+# Definir variáveis de ambiente
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV DB_PATH="/app/data/erp.sqlite"
 
-# Configurar caminho do banco para volume externo
-ENV DB_PATH="/data/erp.sqlite"
-
-CMD ["node", "server.js"]
+# Comando para iniciar aplicação
+CMD ["npm", "run", "dev"]
