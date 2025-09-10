@@ -4,99 +4,91 @@ import { db } from '@/lib/db'
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('=== EMAIL API DEBUG START ===')
+    console.log('📧 Iniciando envio de email...')
     const body = await request.json()
     const { to, subject, html, attachments } = body
-    console.log('Request body:', { to, subject, htmlLength: html?.length, attachments })
-
+    
+    console.log('📧 Dados recebidos:', { to, subject, hasHtml: !!html, attachmentsCount: attachments?.length || 0 })
+    
     if (!to || !subject || !html) {
-      console.log('Missing required fields')
+      console.log('❌ Campos obrigatórios faltando')
       return NextResponse.json(
         { error: 'Campos obrigatórios: to, subject, html' },
         { status: 400 }
       )
     }
 
-    // Obter configurações SMTP da empresa atual (server-side implementation)
-    console.log('Getting current empresa...')
+    // Buscar configurações SMTP da empresa
+    console.log('🏢 Buscando configurações da empresa...')
+    const empresa = db.prepare('SELECT * FROM empresas LIMIT 1').get() as any
     
-    // Get user preferences to find current empresa ID
-    const userPrefsRow = await db.prepare('SELECT * FROM user_prefs WHERE userId = ?').get('default') as any
-    const userPrefs = userPrefsRow ? JSON.parse(userPrefsRow.json) : null
-    const empresaId = userPrefs?.currentEmpresaId
-    
-    if (!empresaId) {
-      console.error('No current empresa ID found in user preferences')
-      return NextResponse.json({ error: 'No current empresa configured' }, { status: 400 })
-    }
-    
-    // Get empresa data
-    const currentEmpresa = await db.prepare('SELECT * FROM empresas WHERE id = ?').get(empresaId)
-    if (!currentEmpresa) {
-      console.error('Empresa not found:', empresaId)
-      return NextResponse.json({ error: 'Empresa not found' }, { status: 404 })
-    }
-    
-    console.log('Current empresa:', currentEmpresa)
-
-    // Get SMTP config from empresa (already loaded)
-    console.log('Getting SMTP config from empresa...');
-    console.log('SMTP config:', {
-      smtp_host: (currentEmpresa as any).smtp_host,
-      smtp_port: (currentEmpresa as any).smtp_port,
-      smtp_secure: (currentEmpresa as any).smtp_secure,
-      smtp_user: (currentEmpresa as any).smtp_user,
-      smtp_password: (currentEmpresa as any).smtp_password ? '[HIDDEN]' : null,
-      smtp_from_name: (currentEmpresa as any).smtp_from_name,
-      smtp_from_email: (currentEmpresa as any).smtp_from_email
-    });
-    
-    const smtpHost = (currentEmpresa as any).smtp_host
-    const smtpPort = (currentEmpresa as any).smtp_port
-    const smtpSecure = (currentEmpresa as any).smtp_secure
-    const smtpUser = (currentEmpresa as any).smtp_user
-    const smtpPassword = (currentEmpresa as any).smtp_password
-    const smtpFromName = (currentEmpresa as any).smtp_from_name
-    const smtpFromEmail = (currentEmpresa as any).smtp_from_email
-
-    console.log('SMTP Config values:', { smtpHost, smtpPort, smtpSecure, smtpUser, smtpPassword: smtpPassword ? '[HIDDEN]' : 'null', smtpFromName, smtpFromEmail })
-    
-    if (!smtpHost || !smtpUser || !smtpPassword) {
-      console.log('SMTP config incomplete')
+    if (!empresa) {
+      console.log('❌ Nenhuma empresa encontrada no banco de dados')
       return NextResponse.json(
-        { error: 'Configurações SMTP incompletas. Configure nas Configurações Gerais.' },
+        { error: 'Empresa não encontrada. Configure uma empresa primeiro.' },
         { status: 400 }
       )
     }
 
-    // Criar transporter do nodemailer
-    console.log('Creating nodemailer transporter...')
-    const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort || 587,
-      secure: smtpSecure || false,
+    console.log('🏢 Empresa encontrada:', empresa.nome || 'Sem nome')
+    console.log('📧 Verificando configurações SMTP...')
+    console.log('- SMTP Host:', empresa.smtp_host ? '✅ Configurado' : '❌ Não configurado')
+    console.log('- SMTP User:', empresa.smtp_user ? '✅ Configurado' : '❌ Não configurado')
+    console.log('- SMTP Password:', empresa.smtp_password ? '✅ Configurado' : '❌ Não configurado')
+    console.log('- SMTP From Email:', empresa.smtp_from_email ? '✅ Configurado' : '❌ Não configurado')
+
+    // Verificar se as configurações SMTP estão completas
+    if (!empresa.smtp_host || !empresa.smtp_user || !empresa.smtp_password || !empresa.smtp_from_email) {
+      console.log('❌ Configurações SMTP incompletas')
+      return NextResponse.json(
+        { 
+          error: 'Configurações SMTP incompletas. Configure o SMTP nas Configurações da Empresa.',
+          missing: {
+            smtp_host: !empresa.smtp_host,
+            smtp_user: !empresa.smtp_user,
+            smtp_password: !empresa.smtp_password,
+            smtp_from_email: !empresa.smtp_from_email
+          }
+        },
+        { status: 400 }
+      )
+    }
+
+    // Configurar transporter do Nodemailer
+    console.log('🔧 Configurando transporter SMTP...')
+    const transporterConfig = {
+      host: empresa.smtp_host,
+      port: empresa.smtp_port || 587,
+      secure: empresa.smtp_secure || false,
       auth: {
-        user: smtpUser,
-        pass: smtpPassword,
+        user: empresa.smtp_user,
+        pass: empresa.smtp_password,
       },
+    }
+    
+    console.log('🔧 Configuração SMTP:', {
+      host: transporterConfig.host,
+      port: transporterConfig.port,
+      secure: transporterConfig.secure,
+      user: transporterConfig.auth.user
     })
-    console.log('Transporter created successfully')
+    
+    const transporter = nodemailer.createTransport(transporterConfig)
 
     // Configurar opções do e-mail
     const mailOptions = {
-      from: `"${smtpFromName || (currentEmpresa as any).nome}" <${smtpFromEmail || smtpUser}>`,
+      from: `"${empresa.smtp_from_name || empresa.nome || 'Sistema de Orçamentos'}" <${empresa.smtp_from_email}>`,
       to,
       subject,
       html,
       attachments: attachments || []
     }
-    console.log('Mail options:', { ...mailOptions, html: '[HTML_CONTENT]' })
 
     // Enviar e-mail
-    console.log('Sending email...')
+    console.log('📤 Enviando email...')
     const info = await transporter.sendMail(mailOptions)
-    console.log('Email sent successfully:', info.messageId)
-
+    
+    console.log('✅ Email enviado com sucesso!', { messageId: info.messageId })
     return NextResponse.json({
       success: true,
       messageId: info.messageId,
@@ -104,11 +96,29 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Erro ao enviar e-mail:', error)
+    console.error('❌ Erro ao enviar e-mail:', error)
+    
+    // Identificar tipo de erro específico
+    let errorMessage = 'Erro interno do servidor ao enviar e-mail'
+    let errorDetails = error instanceof Error ? error.message : 'Erro desconhecido'
+    
+    if (error instanceof Error) {
+      if (error.message.includes('EAUTH')) {
+        errorMessage = 'Erro de autenticação SMTP. Verifique usuário e senha.'
+      } else if (error.message.includes('ECONNREFUSED')) {
+        errorMessage = 'Não foi possível conectar ao servidor SMTP. Verifique host e porta.'
+      } else if (error.message.includes('ETIMEDOUT')) {
+        errorMessage = 'Timeout na conexão SMTP. Verifique a conectividade.'
+      } else if (error.message.includes('Invalid login')) {
+        errorMessage = 'Login inválido. Verifique as credenciais SMTP.'
+      }
+    }
+    
     return NextResponse.json(
       { 
-        error: 'Erro interno do servidor ao enviar e-mail',
-        details: error instanceof Error ? error.message : 'Erro desconhecido'
+        error: errorMessage,
+        details: errorDetails,
+        timestamp: new Date().toISOString()
       },
       { status: 500 }
     )

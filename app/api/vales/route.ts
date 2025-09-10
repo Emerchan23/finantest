@@ -4,8 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(request: NextRequest) {
   try {
-    // Create table if it doesn't exist
-    db.exec(`
+    // Create table if it doesn't exist (apenas em runtime)
+    if (process.env.NEXT_PHASE !== 'phase-production-build' && db.exec) {
+      db.exec(`
       CREATE TABLE IF NOT EXISTS vale_movimentos (
         id TEXT PRIMARY KEY,
         cliente_id TEXT NOT NULL,
@@ -17,6 +18,7 @@ export async function GET(request: NextRequest) {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    }
 
     const searchParams = request.nextUrl.searchParams;
     const clienteId = searchParams.get('cliente_id');

@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '../../../lib/db'
 import { v4 as uuidv4 } from 'uuid'
 
-// Criar tabela despesas_pendentes se não existir
-db.exec(`
+// Criar tabela despesas_pendentes se não existir (apenas em runtime)
+if (process.env.NEXT_PHASE !== 'phase-production-build' && db.exec) {
+  db.exec(`
   CREATE TABLE IF NOT EXISTS despesas_pendentes (
     id TEXT PRIMARY KEY,
     descricao TEXT NOT NULL,
@@ -20,16 +21,17 @@ db.exec(`
   );
 `);
 
-// Adicionar colunas se não existirem (para compatibilidade com bancos existentes)
-try {
-  db.exec(`ALTER TABLE despesas_pendentes ADD COLUMN participanteId TEXT;`);
-} catch (e) {
-  // Coluna já existe
-}
-try {
-  db.exec(`ALTER TABLE despesas_pendentes ADD COLUMN usedInAcertoId TEXT;`);
-} catch (e) {
-  // Coluna já existe
+  // Adicionar colunas se não existirem (para compatibilidade com bancos existentes)
+  try {
+    db.exec(`ALTER TABLE despesas_pendentes ADD COLUMN participanteId TEXT;`);
+  } catch (e) {
+    // Coluna já existe
+  }
+  try {
+    db.exec(`ALTER TABLE despesas_pendentes ADD COLUMN usedInAcertoId TEXT;`);
+  } catch (e) {
+    // Coluna já existe
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -39,7 +41,7 @@ export async function GET(request: NextRequest) {
     const tipo = searchParams.get('tipo')
     
     let query = 'SELECT * FROM despesas_pendentes WHERE 1=1'
-    const params: any[] = []
+    const params: (string | number)[] = []
     
     if (status) {
       query += ' AND status = ?'

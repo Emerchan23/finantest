@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { Mail, Send } from "lucide-react"
 import { makeOrcamentoHTML } from "@/lib/print"
-import { ensureDefaultEmpresa } from "@/lib/empresas"
+// Removed empresa imports - system simplified
 
 interface EmailModalProps {
   orcamento: any
@@ -27,6 +27,7 @@ export function EmailModal({ orcamento, onEmailSent }: EmailModalProps) {
   const { toast } = useToast()
 
   const handleSendEmail = async () => {
+    // Validar email do destinatário
     if (!formData.to.trim()) {
       toast({
         title: "Erro",
@@ -36,10 +37,30 @@ export function EmailModal({ orcamento, onEmailSent }: EmailModalProps) {
       return
     }
 
+    // Validar formato do email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(formData.to.trim())) {
+      toast({
+        title: "Erro",
+        description: "Por favor, informe um e-mail válido",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Validar assunto
+    if (!formData.subject.trim()) {
+      toast({
+        title: "Erro",
+        description: "Por favor, informe o assunto do e-mail",
+        variant: "destructive"
+      })
+      return
+    }
+
     setLoading(true)
     try {
-      // Garantir empresa atual definida
-      await ensureDefaultEmpresa()
+      // System simplified - no empresa validation needed
       
       // Gerar HTML do orçamento
       const withTotal = { ...orcamento, total: orcamento.itens?.reduce((acc: number, it: any) => 
@@ -84,7 +105,16 @@ export function EmailModal({ orcamento, onEmailSent }: EmailModalProps) {
       const result = await response.json()
       
       if (!response.ok) {
-        throw new Error(result.error || 'Erro ao enviar e-mail')
+        // Tratar diferentes tipos de erro com base no status
+        if (response.status === 400) {
+          // Erro de configuração ou validação
+          throw new Error(result.error || 'Erro de configuração')
+        } else if (response.status === 500) {
+          // Erro interno do servidor (SMTP, conectividade, etc.)
+          throw new Error(result.error || 'Erro interno do servidor ao enviar e-mail')
+        } else {
+          throw new Error(result.error || 'Erro ao enviar e-mail')
+        }
       }
       
       toast({
@@ -97,9 +127,30 @@ export function EmailModal({ orcamento, onEmailSent }: EmailModalProps) {
       
     } catch (error) {
       console.error('Erro ao enviar e-mail:', error)
+      
+      let errorMessage = "Erro ao enviar e-mail"
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Configurações SMTP incompletas')) {
+          errorMessage = "⚠️ Configurações de e-mail não encontradas.\n\nPara enviar e-mails, configure:\n• Servidor SMTP (host)\n• Usuário e senha\n• E-mail remetente\n\nAcesse: Configurações → Empresa"
+        } else if (error.message.includes('Empresa não encontrada')) {
+          errorMessage = "❌ Empresa não configurada.\n\nConfigure uma empresa primeiro nas Configurações."
+        } else if (error.message.includes('Erro de autenticação SMTP')) {
+          errorMessage = "🔐 Falha na autenticação do e-mail.\n\nVerifique usuário e senha SMTP nas configurações da empresa."
+        } else if (error.message.includes('Não foi possível conectar ao servidor SMTP')) {
+          errorMessage = "🌐 Não foi possível conectar ao servidor de e-mail.\n\nVerifique:\n• Host SMTP\n• Porta (geralmente 587 ou 465)\n• Conexão com a internet"
+        } else if (error.message.includes('Timeout na conexão SMTP')) {
+          errorMessage = "⏱️ Timeout na conexão com o servidor de e-mail.\n\nVerifique sua conexão com a internet e as configurações SMTP."
+        } else if (error.message.includes('Login inválido')) {
+          errorMessage = "🚫 Login inválido.\n\nVerifique as credenciais SMTP (usuário e senha) nas configurações."
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
       toast({
         title: "Erro",
-        description: error instanceof Error ? error.message : "Erro ao enviar e-mail",
+        description: errorMessage,
         variant: "destructive"
       })
     } finally {
@@ -122,6 +173,9 @@ export function EmailModal({ orcamento, onEmailSent }: EmailModalProps) {
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Enviar Orçamento por E-mail</DialogTitle>
+          <DialogDescription>
+            Preencha os dados abaixo para enviar o orçamento por e-mail para o cliente.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="grid gap-2">

@@ -65,7 +65,7 @@ docker-compose exec app sh
 ## 📁 Estrutura de Dados
 
 O banco de dados SQLite será criado automaticamente em:
-- **Host:** `./data/erp.sqlite`
+- **Host:** `../banco-de-dados/erp.sqlite`
 - **Container:** `/data/erp.sqlite`
 
 Os dados persistem mesmo quando o container é reiniciado.

@@ -35,7 +35,7 @@ docker pull emerchan2025/erp-br:latest
 - **Mapeamento**: Host:3145 -> Container:3145
 
 ### Volumes
-- **Banco de dados**: `./data:/data`
+- **Banco de dados**: `../banco-de-dados:/data`
 - **Arquivo SQLite**: `/data/erp.sqlite`
 
 ### Variáveis de ambiente

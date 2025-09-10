@@ -32,6 +32,7 @@ export default function ProductForm({ initial, onSaved }: Props) {
       estoque: 0,
       linkRef: "",
       custoRef: 0,
+      categoria: "",
     },
   )
   const { toast } = useToast()
@@ -64,14 +65,17 @@ export default function ProductForm({ initial, onSaved }: Props) {
     }
 
     try {
-      // sanitização mínima
+      // Mapear campos do formulário para a API
       const payload = {
         ...form,
-        precoVenda: Number(form.precoVenda ?? 0),
+        preco: Number(form.precoVenda ?? 0), // API espera 'preco'
         custo: Number(form.custo ?? 0),
         taxaImposto: Number(form.taxaImposto ?? 0),
+        modalidadeVenda: form.modalidadeVenda,
         estoque: Number(form.estoque ?? 0),
+        linkRef: form.linkRef,
         custoRef: Number(form.custoRef ?? 0),
+        categoria: form.categoria || null
       } as any
       await saveProduto(payload)
       toast({ title: isEdit ? "Produto atualizado" : "Produto cadastrado" })
@@ -181,6 +185,15 @@ export default function ProductForm({ initial, onSaved }: Props) {
             onChange={(value) => setForm((f) => ({ ...f, custoRef: num(value) }))}
             placeholder="0,00"
             showCurrency={true}
+          />
+        </div>
+
+        <div className="grid gap-2 md:col-span-2">
+          <Label>Categoria</Label>
+          <Input
+            value={form.categoria || ""}
+            onChange={(e) => setForm((f) => ({ ...f, categoria: e.target.value }))}
+            placeholder="Ex.: Eletrônicos, Roupas, etc."
           />
         </div>
 

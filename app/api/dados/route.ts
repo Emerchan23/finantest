@@ -9,9 +9,9 @@ export async function GET(request: NextRequest) {
     switch (tipo) {
       case 'dashboard':
         // Dados consolidados para o dashboard
-        const totalVendas = db.prepare('SELECT COUNT(*) as count, COALESCE(SUM(total), 0) as total FROM vendas').get() as any
-        const totalClientes = db.prepare('SELECT COUNT(*) as count FROM clientes').get() as any
-        const totalProdutos = db.prepare('SELECT COUNT(*) as count FROM produtos').get() as any
+        const totalVendas = db.prepare('SELECT COUNT(*) as count, COALESCE(SUM(total), 0) as total FROM vendas').get() as { count: number; total: number }
+        const totalClientes = db.prepare('SELECT COUNT(*) as count FROM clientes').get() as { count: number }
+        const totalProdutos = db.prepare('SELECT COUNT(*) as count FROM produtos').get() as { count: number }
         
         // Vendas por mês (últimos 6 meses)
         const vendasMensais = db.prepare(`

@@ -15,7 +15,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     
     // Parse linhaIds
-    const linhaIds = (acerto as any).linhaIds ? JSON.parse((acerto as any).linhaIds) : []
+    const acertoData = acerto as { id: string; linhaIds: string | null }
+    const linhaIds = acertoData.linhaIds ? JSON.parse(acertoData.linhaIds) : []
     
     // Start transaction
     const transaction = db.transaction(() => {

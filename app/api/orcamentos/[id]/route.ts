@@ -25,6 +25,27 @@ export async function DELETE(
       );
     }
     
+    // Verificar se o orçamento tem dependências em outras tabelas
+    const vendasRelacionadas = db.prepare(`
+      SELECT COUNT(*) as count 
+      FROM vendas 
+      WHERE orcamento_id = ?
+    `).get(id) as { count: number }
+    
+    const acertosRelacionados = db.prepare(`
+      SELECT COUNT(*) as count 
+      FROM acertos 
+      WHERE orcamento_id = ?
+    `).get(id) as { count: number }
+    
+    const totalDependencias = vendasRelacionadas.count + acertosRelacionados.count
+    
+    if (totalDependencias > 0) {
+      return NextResponse.json({ 
+        error: 'Não é possível excluir este orçamento pois ele possui registros associados (vendas ou acertos).' 
+      }, { status: 400 })
+    }
+    
     // Delete items first (foreign key constraint)
     db.prepare('DELETE FROM orcamento_itens WHERE orcamento_id = ?').run(id);
     
@@ -38,7 +59,10 @@ export async function DELETE(
       );
     }
     
-    return NextResponse.json({ ok: true, message: 'Orçamento excluído com sucesso' });
+    return NextResponse.json(
+      { message: 'Orçamento excluído com sucesso' },
+      { status: 200 }
+    );
   } catch (error) {
     console.error('Erro ao excluir orçamento:', error);
     return NextResponse.json(

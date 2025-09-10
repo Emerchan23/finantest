@@ -2,16 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '../../../lib/db'
 import { v4 as uuidv4 } from 'uuid'
 
-// Criar tabela modalidades se não existir
-db.exec(`
-  CREATE TABLE IF NOT EXISTS modalidades (
-    id TEXT PRIMARY KEY,
-    nome TEXT NOT NULL UNIQUE,
-    ativo BOOLEAN DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-`);
+// Criar tabela modalidades se não existir (apenas em runtime)
+if (process.env.NEXT_PHASE !== 'phase-production-build' && db.exec) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS modalidades (
+      id TEXT PRIMARY KEY,
+      nome TEXT NOT NULL UNIQUE,
+      ativo BOOLEAN DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+}
 
 export async function GET(request: NextRequest) {
   try {

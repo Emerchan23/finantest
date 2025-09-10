@@ -21,7 +21,6 @@ function validateDatabaseAccess(path: string): boolean {
     fs.writeFileSync(testFile, 'test')
     fs.unlinkSync(testFile)
     
-    console.log(`✅ Banco de dados validado: ${path}`)
     return true
   } catch (error) {
     console.error(`❌ Erro de acesso ao banco de dados: ${path}`)
@@ -30,32 +29,43 @@ function validateDatabaseAccess(path: string): boolean {
   }
 }
 
-// Validar acesso antes de criar conexão
-if (!validateDatabaseAccess(dbPath)) {
-  throw new Error(`❌ Sem permissão para acessar banco de dados: ${dbPath}. Verifique as permissões do diretório.`)
+// Validar acesso antes de criar conexão (apenas em runtime, não durante build)
+if (process.env.NODE_ENV !== 'production' && process.env.NEXT_PHASE !== 'phase-production-build') {
+  if (!validateDatabaseAccess(dbPath)) {
+    throw new Error(`❌ Sem permissão para acessar banco de dados: ${dbPath}. Verifique as permissões do diretório.`)
+  }
 }
 
-// Criar conexão com o banco
+// Criar conexão com o banco (apenas em runtime, não durante build)
 let db: Database.Database
-try {
-  db = new Database(dbPath)
-  console.log(`✅ Conexão com banco estabelecida: ${dbPath}`)
-} catch (error) {
-  console.error(`❌ Erro ao conectar com banco:`, error)
-  throw new Error(`❌ Falha na conexão com banco de dados: ${dbPath}`)
+
+if (process.env.NEXT_PHASE === 'phase-production-build') {
+  // Durante o build, criar uma instância mock para evitar erros
+  db = {} as Database.Database
+} else {
+  try {
+    db = new Database(dbPath)
+    console.log(`✅ Conexão com banco estabelecida: ${dbPath}`)
+  } catch (error) {
+    console.error(`❌ Erro ao conectar com banco:`, error)
+    throw new Error(`❌ Falha na conexão com banco de dados: ${dbPath}`)
+  }
 }
 
 export { db }
 
-// Configurar WAL mode para melhor performance
-db.pragma('journal_mode = WAL')
-db.pragma('synchronous = NORMAL')
-db.pragma('cache_size = 1000000')
-db.pragma('foreign_keys = ON')
-db.pragma('temp_store = MEMORY')
+// Configurar WAL mode para melhor performance (apenas em runtime)
+if (process.env.NEXT_PHASE !== 'phase-production-build' && db.pragma) {
+  db.pragma('journal_mode = WAL')
+  db.pragma('synchronous = NORMAL')
+  db.pragma('cache_size = 1000')
+  db.pragma('foreign_keys = ON')
+  db.pragma('temp_store = memory')
+}
 
-// Criar tabelas se não existirem
-db.exec(`
+// Criar tabelas se não existirem (apenas em runtime)
+if (process.env.NEXT_PHASE !== 'phase-production-build' && db.exec) {
+  db.exec(`
   CREATE TABLE IF NOT EXISTS empresas (
     id TEXT PRIMARY KEY,
     nome TEXT NOT NULL,
@@ -89,7 +99,15 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS produtos (
     id TEXT PRIMARY KEY,
     nome TEXT NOT NULL,
+    descricao TEXT,
+    marca TEXT,
     preco REAL NOT NULL,
+    custo REAL DEFAULT 0,
+    taxa_imposto REAL DEFAULT 0,
+    modalidade_venda TEXT,
+    estoque INTEGER DEFAULT 0,
+    link_ref TEXT,
+    custo_ref REAL,
     categoria TEXT,
     empresa_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -127,6 +145,9 @@ db.exec(`
     prazo_entrega TEXT,
     vendedor_id TEXT,
     desconto REAL DEFAULT 0,
+    modalidade TEXT DEFAULT 'compra_direta',
+    numero_pregao TEXT,
+    numero_dispensa TEXT,
     empresa_id TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -191,6 +212,9 @@ db.exec(`
     categoria TEXT,
     cliente_id TEXT,
     data_transacao TEXT NOT NULL,
+    forma_pagamento TEXT,
+    observacoes TEXT,
+    anexos TEXT,
     status TEXT DEFAULT 'ativo',
     juros_ativo BOOLEAN DEFAULT 0,
     juros_mes_percent REAL DEFAULT 0,
@@ -217,9 +241,36 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
-`);
 
-// Ignorar erros se as colunas já existirem
+  CREATE TABLE IF NOT EXISTS vale_movimentos (
+    id TEXT PRIMARY KEY,
+    cliente_id TEXT NOT NULL,
+    data TEXT NOT NULL,
+    tipo TEXT NOT NULL CHECK (tipo IN ('credito', 'debito')),
+    valor REAL NOT NULL,
+    descricao TEXT,
+    referencia_id TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS usuarios (
+    id TEXT PRIMARY KEY,
+    nome TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    senha TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user', 'viewer')),
+    ativo BOOLEAN DEFAULT 1,
+    permissoes TEXT DEFAULT '{}',
+    ultimo_login DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+}
+
+// Ignorar erros se as colunas já existirem (apenas em runtime)
+if (process.env.NEXT_PHASE !== 'phase-production-build' && db.exec) {
 try {
   db.exec(`
     ALTER TABLE empresas ADD COLUMN imposto_padrao REAL;
@@ -267,6 +318,17 @@ try {
   // Coluna já existe
 }
 
+// Adicionar colunas de modalidade aos orçamentos
+try {
+  db.exec(`
+    ALTER TABLE orcamentos ADD COLUMN modalidade TEXT DEFAULT 'compra_direta';
+    ALTER TABLE orcamentos ADD COLUMN numero_pregao TEXT;
+    ALTER TABLE orcamentos ADD COLUMN numero_dispensa TEXT;
+  `)
+} catch (error) {
+  // Coluna já existe
+}
+
 try {
   db.exec(`ALTER TABLE empresas ADD COLUMN smtp_password TEXT`)
 } catch (error) {
@@ -283,6 +345,93 @@ try {
   db.exec(`ALTER TABLE empresas ADD COLUMN smtp_from_email TEXT`)
 } catch (error) {
   // Coluna já existe
+}
+
+// Adicionar colunas da tabela produtos para compatibilidade com bancos existentes
+try {
+  db.exec(`ALTER TABLE produtos ADD COLUMN descricao TEXT`)
+} catch (error) {
+  // Coluna já existe
+}
+
+try {
+  db.exec(`ALTER TABLE produtos ADD COLUMN marca TEXT`)
+} catch (error) {
+  // Coluna já existe
+}
+
+try {
+  db.exec(`ALTER TABLE produtos ADD COLUMN custo REAL DEFAULT 0`)
+} catch (error) {
+  // Coluna já existe
+}
+
+try {
+  db.exec(`ALTER TABLE produtos ADD COLUMN taxa_imposto REAL DEFAULT 0`)
+} catch (error) {
+  // Coluna já existe
+}
+
+try {
+  db.exec(`ALTER TABLE produtos ADD COLUMN modalidade_venda TEXT`)
+} catch (error) {
+  // Coluna já existe
+}
+
+try {
+  db.exec(`ALTER TABLE produtos ADD COLUMN estoque INTEGER DEFAULT 0`)
+} catch (error) {
+  // Coluna já existe
+}
+
+try {
+  db.exec(`ALTER TABLE produtos ADD COLUMN link_ref TEXT`)
+} catch (error) {
+  // Coluna já existe
+}
+
+try {
+  db.exec(`ALTER TABLE produtos ADD COLUMN custo_ref REAL`)
+} catch (error) {
+  // Coluna já existe
+}
+
+// Criar usuário administrador padrão se não existir
+try {
+  const adminExists = db.prepare('SELECT COUNT(*) as count FROM usuarios WHERE email = ?').get('admin@sistema.com') as { count: number }
+  
+  if (adminExists.count === 0) {
+    // Senha padrão: admin123 (hash bcrypt)
+    const bcrypt = require('bcryptjs')
+    const hashedPassword = bcrypt.hashSync('admin123', 10)
+    
+    db.prepare(`
+      INSERT INTO usuarios (id, nome, email, senha, role, ativo, permissoes)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'admin-' + Date.now(),
+      'Administrador',
+      'admin@sistema.com',
+      hashedPassword,
+      'admin',
+      1,
+      JSON.stringify({
+        vendas: true,
+        orcamentos: true,
+        clientes: true,
+        produtos: true,
+        relatorios: true,
+        configuracoes: true,
+        usuarios: true,
+        backup: true
+      })
+    )
+    
+    console.log('✅ Usuário administrador padrão criado: admin@sistema.com / admin123')
+  }
+} catch (error) {
+  console.log('ℹ️ Usuário administrador já existe ou erro ao criar:', error)
+}
 }
 
 export default db

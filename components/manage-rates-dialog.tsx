@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Label } from "@/components/ui/label"
@@ -118,6 +118,9 @@ export function ManageRatesDialog({
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Gerenciar Taxas</DialogTitle>
+          <DialogDescription>
+            Configure as taxas de capital e imposto utilizadas nos cálculos de orçamentos.
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-6 md:grid-cols-2">
           <section className="space-y-3">

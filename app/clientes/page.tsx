@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { AppHeader } from "@/components/app-header"
 import { type Cliente, ensureInit, getClientes } from "@/lib/data-store"
-import { ensureDefaultEmpresa } from "@/lib/empresas"
+// Removed empresa imports - system simplified
 import { api } from "@/lib/api-client"
 import { fmtDate } from "@/lib/format"
 import { Button } from "@/components/ui/button"
@@ -23,8 +23,6 @@ export default function ClientesPage() {
     async function loadData() {
       ensureInit()
       try {
-        // Garantir que existe uma empresa padrão selecionada
-        await ensureDefaultEmpresa()
         const clientes = await getClientes()
         setList(clientes)
       } catch (error) {
@@ -37,8 +35,6 @@ export default function ClientesPage() {
 
   async function refresh() {
     try {
-      // Garantir que existe uma empresa padrão selecionada
-      await ensureDefaultEmpresa()
       const clientes = await getClientes()
       setList(clientes)
     } catch (error) {
@@ -183,8 +179,41 @@ export default function ClientesPage() {
                           try {
                             await api.clientes.delete(c.id)
                             refresh()
-                          } catch (error) {
-                            console.error('Erro ao excluir cliente:', error)
+                            toast({
+                              title: "Cliente excluído",
+                              description: "Cliente excluído com sucesso.",
+                            })
+                          } catch (error: any) {
+                            // Verifica se é erro de dependências (HTTP 400)
+                            if (error.message && error.message.includes('400')) {
+                              // Buscar detalhes dos registros vinculados
+                              try {
+                                const response = await fetch(`/api/clientes/${c.id}/dependencies`)
+                                const dependencies = await response.json()
+                                
+                                let detailsMessage = "Este cliente não pode ser excluído pois possui:\n\n"
+                                if (dependencies.vendas > 0) detailsMessage += `• ${dependencies.vendas} venda(s)\n`
+                                if (dependencies.orcamentos > 0) detailsMessage += `• ${dependencies.orcamentos} orçamento(s)\n`
+                                if (dependencies.outrosNegocios > 0) detailsMessage += `• ${dependencies.outrosNegocios} outro(s) negócio(s)\n`
+                                if (dependencies.valeMovimentos > 0) detailsMessage += `• ${dependencies.valeMovimentos} movimento(s) de vale\n`
+                                detailsMessage += "\nExclua primeiro esses registros para poder deletar o cliente."
+                                
+                                alert(detailsMessage)
+                              } catch {
+                                toast({
+                                  title: "Não é possível excluir",
+                                  description: "Este cliente possui registros associados. Exclua primeiro os registros relacionados.",
+                                  variant: "destructive",
+                                })
+                              }
+                            } else {
+                              console.error('Erro ao excluir cliente:', error)
+                              toast({
+                                title: "Erro",
+                                description: "Erro inesperado ao excluir cliente.",
+                                variant: "destructive",
+                              })
+                            }
                           }
                         }}
                       >

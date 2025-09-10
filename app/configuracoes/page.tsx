@@ -10,28 +10,22 @@ import { CurrencyInput } from "@/components/ui/currency-input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
-import type { Empresa } from "@/lib/empresas"
-import {
-  ensureDefaultEmpresa,
-  getCurrentEmpresa,
-  saveEmpresa,
-} from "@/lib/empresas"
-import { updateCurrentEmpresaById, reloadCurrentEmpresa } from "@/lib/empresas-client"
 import {
   ERP_CHANGED_EVENT,
   getBackup,
   restoreBackup,
 } from "@/lib/data-store"
-import { type EmpresaConfig as EmpresaCfgScoped, type OrcamentoLayoutConfig, getActiveEmpresaConfig, saveEmpresaConfig } from "@/lib/company-config"
+import { getConfig, saveConfig, loadConfig, type Config } from "@/lib/config"
+import { formatCNPJ, formatPhone, unformatCNPJ, unformatPhone } from "@/lib/masks"
 import { OrcamentoPreview } from "@/components/orcamento-preview"
+import DocumentPreview from '@/components/document-preview';
+import { AlertTriangle } from "lucide-react"
+import { UsuariosManagement } from "@/components/UsuariosManagement"
 
 export default function ConfiguracoesPage() {
-  const [currentId, setCurrentId] = useState<string>("")  
-  const [currentEmpresa, setCurrentEmpresa] = useState<Empresa | null>(null)
-  const [formEmpresa, setFormEmpresa] = useState<Partial<Empresa>>({})
-  const [formCfg, setFormCfg] = useState<EmpresaCfgScoped>({})
-  const [layoutOrcamento, setLayoutOrcamento] = useState<OrcamentoLayoutConfig>({} as OrcamentoLayoutConfig)
+  const [formData, setFormData] = useState<Partial<Config>>({})
   const [smtpConfig, setSmtpConfig] = useState({
     host: "",
     port: 587,
@@ -42,66 +36,88 @@ export default function ConfiguracoesPage() {
     fromEmail: ""
   })
 
+  // Estado de loading para teste de email
+  const [testingEmail, setTestingEmail] = useState(false)
+  
+  // Configurações de personalização
+  const [personalizacaoConfig, setPersonalizacaoConfig] = useState({
+    corPrimaria: "#3b82f6",
+    corSecundaria: "#64748b",
+    corTexto: "#1f2937",
+    fonteTitulo: "Inter",
+    fonteTexto: "Inter",
+    tamanhoTitulo: 24,
+    tamanhoTexto: 14,
+    logoPersonalizada: "",
+    validadeOrcamento: 30
+  })
+
   // Backup
   const [mergeImport, setMergeImport] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  
+  // Configurações de backup
+  const [backupConfig, setBackupConfig] = useState({
+    autoBackupEnabled: false,
+    backupFrequency: "every3days",
+    backupTime: "02:00",
+    keepLocalBackup: true,
+    maxBackups: 7,
+    lastBackup: null as string | null
+  })
+  
   const { toast } = useToast()
+
+
 
   const reload = async () => {
     try {
-      // Garantir que existe uma empresa padrão
-      await ensureDefaultEmpresa()
-      
-      // Obter a empresa atual
-      const currentEmpresa = await getCurrentEmpresa()
-      if (!currentEmpresa) {
-        throw new Error('Nenhuma empresa encontrada')
-      }
-      
-      setCurrentId(currentEmpresa.id)
-      setCurrentEmpresa(currentEmpresa)
-      
-      // Carregar configuração da empresa
-      const { api } = await import("@/lib/api-client")
-      let empresaConfig: any = {}
-      try {
-        empresaConfig = await api.empresas.config.get(currentEmpresa.id)
-        console.log('Dados carregados da API:', empresaConfig)
-      } catch (configError) {
-        console.warn('Erro ao carregar configuração da empresa:', configError)
-      }
-      
-      const formEmpresaData = {
-        id: currentEmpresa.id,
-        nome: currentEmpresa.nome,
-        razaoSocial: empresaConfig?.razaoSocial || "",
-        cnpj: empresaConfig?.cnpj || "",
-        endereco: empresaConfig?.endereco || "",
-        email: empresaConfig?.email || "",
-        telefone: empresaConfig?.telefone || "",
-        logoUrl: empresaConfig?.logoUrl || "",
-        nomeDoSistema: empresaConfig?.nomeDoSistema || "",
-      }
-      console.log('Dados do formulário:', formEmpresaData)
-      setFormEmpresa(formEmpresaData)
-      
-      const formCfgData = {
-        impostoPadrao: empresaConfig?.impostoPadrao,
-        capitalPadrao: empresaConfig?.capitalPadrao
-      }
-      setFormCfg(formCfgData)
-      
-      setLayoutOrcamento(empresaConfig?.layoutOrcamento || {} as OrcamentoLayoutConfig)
+      const config = await loadConfig()
+      setFormData({
+        nome: config.nome || "Minha Empresa",
+        razaoSocial: config.razaoSocial || "",
+        cnpj: config.cnpj || "",
+        endereco: config.endereco || "",
+        email: config.email || "",
+        telefone: config.telefone || "",
+        logoUrl: config.logoUrl || "",
+        nomeDoSistema: config.nomeDoSistema || "LP IND",
+        impostoPadrao: config.impostoPadrao || 10,
+        capitalPadrao: config.capitalPadrao || 15
+      })
       
       // Carregar configurações SMTP
       setSmtpConfig({
-        host: empresaConfig?.smtpHost || "",
-        port: empresaConfig?.smtpPort || 587,
-        secure: empresaConfig?.smtpSecure || false,
-        user: empresaConfig?.smtpUser || "",
-        password: empresaConfig?.smtpPassword || "",
-        fromName: empresaConfig?.smtpFromName || "",
-        fromEmail: empresaConfig?.smtpFromEmail || ""
+        host: config.smtpHost || "",
+        port: config.smtpPort || 587,
+        secure: config.smtpSecure || false,
+        user: config.smtpUser || "",
+        password: config.smtpPassword || "",
+        fromName: config.smtpFromName || "",
+        fromEmail: config.smtpFromEmail || ""
+      })
+
+      // Carregar configurações de personalização
+      setPersonalizacaoConfig({
+        corPrimaria: config.corPrimaria || "#3b82f6",
+        corSecundaria: config.corSecundaria || "#64748b",
+        corTexto: config.corTexto || "#1f2937",
+        fonteTitulo: config.fonteTitulo || "Inter",
+        fonteTexto: config.fonteTexto || "Inter",
+        tamanhoTitulo: config.tamanhoTitulo || 24,
+        tamanhoTexto: config.tamanhoTexto || 14,
+        logoPersonalizada: config.logoPersonalizada || "",
+        validadeOrcamento: config.validadeOrcamento || 30
+      })
+
+      // Carregar configurações de backup
+      setBackupConfig({
+        autoBackupEnabled: config.autoBackupEnabled || false,
+        backupFrequency: config.backupFrequency || "every3days",
+        backupTime: config.backupTime || "02:00",
+        keepLocalBackup: config.keepLocalBackup !== undefined ? config.keepLocalBackup : true,
+        maxBackups: config.maxBackups || 7,
+        lastBackup: config.lastBackup || null
       })
 
     } catch (error) {
@@ -127,40 +143,32 @@ export default function ConfiguracoesPage() {
 
   const handleSalvarGeral = async () => {
     try {
-      if (!currentEmpresa) {
-        toast({
-          title: "Erro",
-          description: "Nenhuma empresa selecionada",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Salvar dados da empresa
-      const empresaAtualizada = {
-        ...currentEmpresa,
-        nome: formEmpresa.nome || currentEmpresa.nome,
-      }
-      await saveEmpresa(empresaAtualizada)
-
-      // Salvar configurações da empresa
-      const { api } = await import("@/lib/api-client")
+      // Salvar configurações gerais
       const configData = {
-        razaoSocial: formEmpresa.razaoSocial,
-        cnpj: formEmpresa.cnpj,
-        endereco: formEmpresa.endereco,
-        email: formEmpresa.email,
-        telefone: formEmpresa.telefone,
-        logoUrl: formEmpresa.logoUrl,
-        nomeDoSistema: formEmpresa.nomeDoSistema,
-        impostoPadrao: formCfg.impostoPadrao,
-        capitalPadrao: formCfg.capitalPadrao,
+        nome: formData.nome,
+        razaoSocial: formData.razaoSocial,
+        cnpj: formData.cnpj,
+        endereco: formData.endereco,
+        email: formData.email,
+        telefone: formData.telefone,
+        logoUrl: formData.logoUrl,
+        nomeDoSistema: formData.nomeDoSistema,
+        impostoPadrao: formData.impostoPadrao,
+        capitalPadrao: formData.capitalPadrao,
+        ...smtpConfig,
+        smtpHost: smtpConfig.host,
+        smtpPort: smtpConfig.port,
+        smtpSecure: smtpConfig.secure,
+        smtpUser: smtpConfig.user,
+        smtpPassword: smtpConfig.password,
+        smtpFromName: smtpConfig.fromName,
+        smtpFromEmail: smtpConfig.fromEmail
       }
       
-      await api.empresas.config.set(currentEmpresa.id, configData)
+      await saveConfig(configData)
       
       // Disparar evento para atualizar outros componentes
-      window.dispatchEvent(new CustomEvent(ERP_CHANGED_EVENT, { detail: { key: "empresa-config" } }))
+      window.dispatchEvent(new CustomEvent(ERP_CHANGED_EVENT, { detail: { key: "config" } }))
       
       toast({
         title: "Sucesso",
@@ -178,49 +186,9 @@ export default function ConfiguracoesPage() {
     }
   }
 
-  const handleSalvarLayoutOrcamento = async () => {
+  const handleSalvarSmtp = async () => {
     try {
-      if (!currentEmpresa) {
-        toast({
-          title: "Erro",
-          description: "Nenhuma empresa selecionada",
-          variant: "destructive",
-        })
-        return
-      }
-
-      const { api } = await import("@/lib/api-client")
-      await api.empresas.config.set(currentEmpresa.id, {
-        layoutOrcamento
-      })
-      
-      toast({
-        title: "Sucesso",
-        description: "Configurações de layout salvas com sucesso!",
-      })
-    } catch (error) {
-      console.error('Erro ao salvar layout:', error)
-      toast({
-        title: "Erro",
-        description: "Erro ao salvar configurações de layout",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleSalvarSMTP = async () => {
-    try {
-      if (!currentEmpresa) {
-        toast({
-          title: "Erro",
-          description: "Nenhuma empresa selecionada",
-          variant: "destructive",
-        })
-        return
-      }
-
-      const { api } = await import("@/lib/api-client")
-      await api.empresas.config.set(currentEmpresa.id, {
+      const configData = {
         smtpHost: smtpConfig.host,
         smtpPort: smtpConfig.port,
         smtpSecure: smtpConfig.secure,
@@ -228,7 +196,10 @@ export default function ConfiguracoesPage() {
         smtpPassword: smtpConfig.password,
         smtpFromName: smtpConfig.fromName,
         smtpFromEmail: smtpConfig.fromEmail
-      })
+      }
+      
+      const currentConfig = getConfig()
+      saveConfig({ ...currentConfig, ...configData })
       
       toast({
         title: "Sucesso",
@@ -244,77 +215,140 @@ export default function ConfiguracoesPage() {
     }
   }
 
-  const [testingConnection, setTestingConnection] = useState(false)
-
-  const handleTestarConexaoSMTP = async () => {
+  const handleSalvarPersonalizacao = async () => {
     try {
-      setTestingConnection(true)
-      
-      if (!currentEmpresa) {
-        toast({
-          title: "Erro",
-          description: "Nenhuma empresa selecionada",
-          variant: "destructive",
-        })
-        return
+      const configData = {
+        corPrimaria: personalizacaoConfig.corPrimaria,
+        corSecundaria: personalizacaoConfig.corSecundaria,
+        corTexto: personalizacaoConfig.corTexto,
+        fonteTitulo: personalizacaoConfig.fonteTitulo,
+        fonteTexto: personalizacaoConfig.fonteTexto,
+        tamanhoTitulo: personalizacaoConfig.tamanhoTitulo,
+        tamanhoTexto: personalizacaoConfig.tamanhoTexto,
+        logoPersonalizada: personalizacaoConfig.logoPersonalizada,
+        validadeOrcamento: personalizacaoConfig.validadeOrcamento || 30
       }
+      
+      const currentConfig = getConfig()
+      saveConfig({ ...currentConfig, ...configData })
+      
+      toast({
+        title: "Sucesso",
+        description: "Configurações de personalização salvas com sucesso!",
+      })
+    } catch (error) {
+      console.error('Erro ao salvar personalização:', error)
+      toast({
+        title: "Erro",
+        description: "Erro ao salvar configurações de personalização",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleTestarSmtp = async () => {
+    try {
+      setTestingEmail(true)
+      
+      // Primeiro salvar as configurações SMTP atuais
+      await handleSalvarSmtp()
+      
+      // Mostrar toast de carregamento
+      toast({
+        title: "🔄 Testando conexão...",
+        description: "Verificando comunicação com o servidor SMTP",
+      })
       
       const response = await fetch('/api/email/test-connection', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          empresaId: currentEmpresa.id
-        })
+          empresaId: 1 // ID padrão da empresa
+        }),
       })
-      
+
       const result = await response.json()
-      
+
       if (response.ok && result.success) {
+        // Sucesso - mostrar informações detalhadas
+        const details = result.details
         toast({
-          title: "Sucesso",
-          description: result.message || "Conexão SMTP testada com sucesso!",
+          title: "✅ Conexão SMTP Estabelecida!",
+          description: `Servidor: ${details.server} | Tempo: ${details.connectionTime} | ${details.security}`,
         })
+        
+        // Log detalhado no console para o usuário técnico
+        console.log('📧 Teste de Conexão SMTP - SUCESSO')
+        console.log('📊 Detalhes da Conexão:')
+        console.log(`   • Status: ${details.status}`)
+        console.log(`   • Servidor: ${details.server}`)
+        console.log(`   • Segurança: ${details.security}`)
+        console.log(`   • Autenticação: ${details.authentication}`)
+        console.log(`   • Tempo de Conexão: ${details.connectionTime}`)
+        console.log(`   • Testado em: ${details.timestamp}`)
+        
       } else {
+        // Erro - mostrar informações detalhadas
+        const errorMsg = result.error || "Erro ao testar conexão SMTP"
+        const errorDetails = result.details || ""
+        const troubleshooting = result.troubleshooting || []
+        
         toast({
-          title: "Erro na Conexão",
-          description: result.details || result.error || "Erro ao testar conexão SMTP",
+          title: "❌ Falha na Conexão SMTP",
+          description: `${errorMsg}${errorDetails ? ` - ${errorDetails}` : ''}`,
           variant: "destructive",
         })
+        
+        // Log detalhado no console para diagnóstico
+        console.error('📧 Teste de Conexão SMTP - FALHA')
+        console.error(`❌ Erro: ${errorMsg}`)
+        if (errorDetails) console.error(`📝 Detalhes: ${errorDetails}`)
+        if (troubleshooting.length > 0) {
+          console.error('🔧 Dicas para solução:')
+          troubleshooting.forEach((tip: string, index: number) => {
+            console.error(`   ${index + 1}. ${tip}`)
+          })
+        }
+        if (result.timestamp) console.error(`⏰ Testado em: ${result.timestamp}`)
       }
     } catch (error) {
-      console.error('Erro ao testar conexão SMTP:', error)
+      console.error('❌ Erro crítico ao testar SMTP:', error)
       toast({
-        title: "Erro",
-        description: "Erro ao testar conexão SMTP",
+        title: "❌ Erro Crítico",
+        description: "Falha na comunicação com o servidor. Verifique sua conexão.",
         variant: "destructive",
       })
     } finally {
-      setTestingConnection(false)
+      setTestingEmail(false)
     }
   }
 
-  const handleExport = async () => {
+  const handleExportarBackup = async () => {
     try {
-      const backup = await getBackup()
-      const dataStr = JSON.stringify(backup, null, 2)
-      const dataBlob = new Blob([dataStr], { type: "application/json" })
-      const url = URL.createObjectURL(dataBlob)
-      const link = document.createElement("a")
-      link.href = url
-      link.download = `backup-${new Date().toISOString().slice(0, 10)}.json`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      const response = await fetch('/api/backup/export')
+      if (!response.ok) {
+        throw new Error('Erro ao exportar backup')
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.style.display = 'none'
+      a.href = url
+      a.download = `backup-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
       
       toast({
         title: "Sucesso",
         description: "Backup exportado com sucesso!",
       })
     } catch (error) {
-      console.error('Erro ao exportar:', error)
+      console.error('Erro ao exportar backup:', error)
       toast({
         title: "Erro",
         description: "Erro ao exportar backup",
@@ -323,556 +357,652 @@ export default function ConfiguracoesPage() {
     }
   }
 
-  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportarBackup = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
     try {
-      const text = await file.text()
-      const data = JSON.parse(text)
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('merge', mergeImport.toString())
       
-      await restoreBackup(data, { merge: mergeImport })
+      const response = await fetch('/api/backup/import', {
+        method: 'POST',
+        body: formData,
+      })
       
-      // Recarregar a página após importação
-      window.location.reload()
+      if (!response.ok) {
+        throw new Error('Erro ao importar backup')
+      }
       
       toast({
         title: "Sucesso",
-        description: mergeImport ? "Dados mesclados com sucesso!" : "Backup restaurado com sucesso!",
+        description: "Backup importado com sucesso!",
       })
+      
+      // Recarregar a página após importar
+      window.location.reload()
     } catch (error) {
-      console.error('Erro ao importar:', error)
+      console.error('Erro ao importar backup:', error)
       toast({
         title: "Erro",
-        description: "Erro ao importar backup. Verifique se o arquivo é válido.",
+        description: "Erro ao importar backup",
         variant: "destructive",
       })
-    } finally {
-      // Limpar o input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ""
-      }
     }
   }
 
+
+
+
+
+  const handleSalvarBackupConfig = async () => {
+    try {
+      const configData = {
+        autoBackupEnabled: backupConfig.autoBackupEnabled,
+        backupFrequency: backupConfig.backupFrequency,
+        backupTime: backupConfig.backupTime,
+        keepLocalBackup: backupConfig.keepLocalBackup,
+        maxBackups: backupConfig.maxBackups,
+        lastBackup: backupConfig.lastBackup
+      }
+      
+      const currentConfig = getConfig()
+      saveConfig({ ...currentConfig, ...configData })
+      
+      toast({
+        title: "Sucesso",
+        description: "Configurações de backup salvas com sucesso!",
+      })
+    } catch (error) {
+      console.error('Erro ao salvar configurações de backup:', error)
+      toast({
+        title: "Erro",
+        description: "Erro ao salvar configurações de backup",
+        variant: "destructive",
+      })
+    }
+  }
+
+
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-50">
       <AppHeader />
-      <main className="container mx-auto max-w-6xl space-y-6 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold">Configurações Gerais</h1>
-          <div className="text-sm text-muted-foreground">
-            Empresa atual: <span className="font-medium">{currentEmpresa?.nome || "—"}</span>
-          </div>
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
         </div>
 
-        {/* Informações da Empresa */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Informações da Empresa</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm text-muted-foreground mb-4">
-              Configure as informações básicas da sua empresa.
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="grid gap-2">
+        <div className="text-sm text-muted-foreground">
+          Sistema simplificado - Configurações gerais
+        </div>
+
+        <Tabs defaultValue="geral" className="w-full">
+          <TabsList className="grid w-full grid-cols-6">
+            <TabsTrigger value="geral">Geral</TabsTrigger>
+            <TabsTrigger value="negocio">Negócio</TabsTrigger>
+            <TabsTrigger value="personalizacao">Personalização</TabsTrigger>
+            <TabsTrigger value="email">E-mail</TabsTrigger>
+            <TabsTrigger value="backup">Backup</TabsTrigger>
+            <TabsTrigger value="usuarios">Usuários</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="geral" className="space-y-6">
+            {/* Informações Gerais */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Informações Gerais</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Configure as informações básicas do sistema.
+                </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
                 <Label htmlFor="nome">Nome da Empresa</Label>
                 <Input
                   id="nome"
-                  value={formEmpresa.nome || ""}
-                  onChange={(e) => {
-                    setFormEmpresa((s) => ({ ...s, nome: e.target.value }))
-                  }}
+                  value={formData.nome || ""}
+                  onChange={(e) =>
+                    setFormData((s: Partial<Config>) => ({ ...s, nome: e.target.value }))
+                  }
                   placeholder="Minha Empresa LTDA"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="imposto">Taxa de Imposto Padrão (%)</Label>
-                <CurrencyInput
-                  id="imposto"
-                  value={formCfg.impostoPadrao ?? ""}
-                  onChange={(value) => {
-                    setFormCfg((s) => {
-                      const newValue = value === "" ? undefined : Number(value.replace(',', '.'))
-                      return {
-                        ...s,
-                        impostoPadrao: newValue,
-                      }
-                    })
-                  }}
-                  placeholder="Ex.: 11,5"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="razao">Razão Social</Label>
-                <Input
-                  id="razao"
-                  value={formEmpresa.razaoSocial || ""}
-                  onChange={(e) => {
-                    setFormEmpresa((s) => ({ ...s, razaoSocial: e.target.value }))
-                  }}
-                  placeholder="Razão social"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="cnpj">CNPJ</Label>
-                <Input
-                  id="cnpj"
-                  value={formEmpresa.cnpj || ""}
-                  onChange={(e) => setFormEmpresa((s) => ({ ...s, cnpj: e.target.value }))}
-                  placeholder="Somente números"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="capital">Taxa de Capital Padrão (%)</Label>
-                <CurrencyInput
-                  id="capital"
-                  value={formCfg.capitalPadrao ?? ""}
-                  onChange={(value) => {
-                    setFormCfg((s) => {
-                      const newValue = value === "" ? undefined : Number(value.replace(',', '.'))
-                      return {
-                        ...s,
-                        capitalPadrao: newValue,
-                      }
-                    })
-                  }}
-                  placeholder="Ex.: 3,5"
-                />
-              </div>
-              <div className="grid gap-2">
+              <div>
                 <Label htmlFor="nomeDoSistema">Nome do Sistema</Label>
                 <Input
                   id="nomeDoSistema"
-                  value={formEmpresa.nomeDoSistema || ""}
-                  onChange={(e) => setFormEmpresa((s) => ({ ...s, nomeDoSistema: e.target.value }))}
+                  value={formData.nomeDoSistema || ""}
+                  onChange={(e) => setFormData((s: Partial<Config>) => ({ ...s, nomeDoSistema: e.target.value }))}
                   placeholder="LP IND"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="logo">URL da Logo (opcional)</Label>
+              <div>
+                <Label htmlFor="razaoSocial">Razão Social</Label>
                 <Input
-                  id="logo"
-                  value={formEmpresa.logoUrl || ""}
-                  onChange={(e) => setFormEmpresa((s) => ({ ...s, logoUrl: e.target.value }))}
-                  placeholder="https://.../logo.png"
+                  id="razaoSocial"
+                  value={formData.razaoSocial || ""}
+                  onChange={(e) =>
+                    setFormData((s: Partial<Config>) => ({ ...s, razaoSocial: e.target.value }))
+                  }
+                  placeholder="Minha Empresa LTDA"
                 />
               </div>
-              <div className="grid gap-2 md:col-span-2">
+              <div>
+                <Label htmlFor="cnpj">CNPJ</Label>
+                <Input
+                  id="cnpj"
+                  value={formatCNPJ(formData.cnpj || '')}
+                  onChange={(e) => {
+                    const formatted = formatCNPJ(e.target.value)
+                    setFormData((s: Partial<Config>) => ({ ...s, cnpj: unformatCNPJ(formatted) }))
+                  }}
+                  placeholder="00.000.000/0000-00"
+                  maxLength={18}
+                />
+              </div>
+              <div>
+                <Label htmlFor="logoUrl">URL do Logo</Label>
+                <Input
+                  id="logoUrl"
+                  value={formData.logoUrl || ""}
+                  onChange={(e) => setFormData((s: Partial<Config>) => ({ ...s, logoUrl: e.target.value }))}
+                  placeholder="https://exemplo.com/logo.png"
+                />
+              </div>
+              <div>
                 <Label htmlFor="endereco">Endereço</Label>
                 <Input
                   id="endereco"
-                  value={formEmpresa.endereco || ""}
-                  onChange={(e) => setFormEmpresa((s) => ({ ...s, endereco: e.target.value }))}
-                  placeholder="Rua, nº, bairro, cidade - UF"
+                  value={formData.endereco || ""}
+                  onChange={(e) => setFormData((s: Partial<Config>) => ({ ...s, endereco: e.target.value }))}
+                  placeholder="Rua, Número, Bairro, Cidade - UF"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email">E-mail da Empresa</Label>
+              <div>
+                <Label htmlFor="email">E-mail</Label>
                 <Input
                   id="email"
                   type="email"
-                  value={formEmpresa.email || ""}
-                  onChange={(e) => setFormEmpresa((s) => ({ ...s, email: e.target.value }))}
+                  value={formData.email || ""}
+                  onChange={(e) => setFormData((s: Partial<Config>) => ({ ...s, email: e.target.value }))}
                   placeholder="contato@empresa.com"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="telefone">Telefone da Empresa</Label>
+              <div>
+                <Label htmlFor="telefone">Telefone</Label>
                 <Input
                   id="telefone"
-                  value={formEmpresa.telefone || ""}
-                  onChange={(e) => setFormEmpresa((s) => ({ ...s, telefone: e.target.value }))}
+                  value={formatPhone(formData.telefone || '')}
+                  onChange={(e) => {
+                    const formatted = formatPhone(e.target.value)
+                    setFormData((s: Partial<Config>) => ({ ...s, telefone: unformatPhone(formatted) }))
+                  }}
                   placeholder="(11) 99999-9999"
+                  maxLength={15}
                 />
               </div>
             </div>
-            <div className="mt-4">
-              <Button onClick={handleSalvarGeral}>Salvar Configurações</Button>
-            </div>
-          </CardContent>
-        </Card>
+                <Button onClick={handleSalvarGeral} className="w-full">
+                  Salvar Configurações Gerais
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* Layout do Orçamento */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Layout do Orçamento</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="text-sm text-muted-foreground mb-4">
-              Configure a aparência visual dos orçamentos gerados.
+          <TabsContent value="negocio" className="space-y-6">
+            {/* Configurações de Negócio */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Configurações de Negócio</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="impostoPadrao">Imposto Padrão (%)</Label>
+                <CurrencyInput
+                  id="impostoPadrao"
+                  value={formData.impostoPadrao || 0}
+                  onValueChange={(value) => setFormData((s: Partial<Config>) => ({ ...s, impostoPadrao: value }))}
+                  placeholder="10"
+                  allowDecimals
+                  decimalScale={2}
+                  suffix="%"
+                />
+              </div>
+              <div>
+                <Label htmlFor="capitalPadrao">Capital Padrão (%)</Label>
+                <CurrencyInput
+                  id="capitalPadrao"
+                  value={formData.capitalPadrao || 0}
+                  onValueChange={(value) => setFormData((s: Partial<Config>) => ({ ...s, capitalPadrao: value }))}
+                  placeholder="15"
+                  allowDecimals
+                  decimalScale={2}
+                  suffix="%"
+                />
+              </div>
             </div>
-            
-            {/* Cores */}
-            <div className="space-y-4">
-              <h4 className="text-md font-medium">Cores</h4>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="grid gap-2">
-                  <Label htmlFor="corPrimaria">Cor Primária</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="corPrimaria"
-                      type="color"
-                      value={layoutOrcamento.cores?.primaria || "#2563eb"}
-                      onChange={(e) => {
-                        setLayoutOrcamento(prev => ({
-                          ...prev,
-                          cores: { ...prev.cores, primaria: e.target.value }
-                        }))
-                      }}
-                      className="w-20"
-                    />
-                    <Select
-                      value={layoutOrcamento.cores?.primaria || "#2563eb"}
-                      onValueChange={(value) => {
-                        setLayoutOrcamento(prev => ({
-                          ...prev,
-                          cores: { ...prev.cores, primaria: value }
-                        }))
-                      }}
-                    >
-                      <SelectTrigger className="flex-1">
-                        <SelectValue placeholder="Cores predefinidas" />
+                <Button onClick={handleSalvarGeral} className="w-full">
+                  Salvar Configurações de Negócio
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="personalizacao" className="space-y-6">
+            {/* Configurações de Personalização */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Personalização de Documentos</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Personalize as cores, fontes e estilos dos documentos gerados (orçamentos, vales, etc.).
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="corPrimaria">Cor Primária</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="corPrimaria"
+                        type="color"
+                        value={personalizacaoConfig.corPrimaria}
+                        onChange={(e) => setPersonalizacaoConfig(s => ({ ...s, corPrimaria: e.target.value }))}
+                        className="w-16 h-10 p-1 border rounded"
+                      />
+                      <Input
+                        value={personalizacaoConfig.corPrimaria}
+                        onChange={(e) => setPersonalizacaoConfig(s => ({ ...s, corPrimaria: e.target.value }))}
+                        placeholder="#3b82f6"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="corSecundaria">Cor Secundária</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="corSecundaria"
+                        type="color"
+                        value={personalizacaoConfig.corSecundaria}
+                        onChange={(e) => setPersonalizacaoConfig(s => ({ ...s, corSecundaria: e.target.value }))}
+                        className="w-16 h-10 p-1 border rounded"
+                      />
+                      <Input
+                        value={personalizacaoConfig.corSecundaria}
+                        onChange={(e) => setPersonalizacaoConfig(s => ({ ...s, corSecundaria: e.target.value }))}
+                        placeholder="#64748b"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="corTexto">Cor do Texto</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="corTexto"
+                        type="color"
+                        value={personalizacaoConfig.corTexto}
+                        onChange={(e) => setPersonalizacaoConfig(s => ({ ...s, corTexto: e.target.value }))}
+                        className="w-16 h-10 p-1 border rounded"
+                      />
+                      <Input
+                        value={personalizacaoConfig.corTexto}
+                        onChange={(e) => setPersonalizacaoConfig(s => ({ ...s, corTexto: e.target.value }))}
+                        placeholder="#1f2937"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="fonteTitulo">Fonte dos Títulos</Label>
+                    <Select value={personalizacaoConfig.fonteTitulo} onValueChange={(value) => setPersonalizacaoConfig(s => ({ ...s, fonteTitulo: value }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a fonte" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="#2563eb">Azul Padrão</SelectItem>
-                        <SelectItem value="#1e40af">Azul Escuro</SelectItem>
-                        <SelectItem value="#0ea5e9">Azul Claro</SelectItem>
-                        <SelectItem value="#10b981">Verde</SelectItem>
-                        <SelectItem value="#059669">Verde Escuro</SelectItem>
-                        <SelectItem value="#f59e0b">Laranja</SelectItem>
-                        <SelectItem value="#dc2626">Vermelho</SelectItem>
-                        <SelectItem value="#7c3aed">Roxo</SelectItem>
-                        <SelectItem value="#374151">Cinza Escuro</SelectItem>
-                        <SelectItem value="#000000">Preto</SelectItem>
+                        <SelectItem value="Inter">Inter</SelectItem>
+                        <SelectItem value="Arial">Arial</SelectItem>
+                        <SelectItem value="Helvetica">Helvetica</SelectItem>
+                        <SelectItem value="Times New Roman">Times New Roman</SelectItem>
+                        <SelectItem value="Georgia">Georgia</SelectItem>
+                        <SelectItem value="Roboto">Roboto</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="corSecundaria">Cor Secundária</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="corSecundaria"
-                      type="color"
-                      value={layoutOrcamento.cores?.secundaria || "#64748b"}
-                      onChange={(e) => {
-                        setLayoutOrcamento(prev => ({
-                          ...prev,
-                          cores: { ...prev.cores, secundaria: e.target.value }
-                        }))
-                      }}
-                      className="w-20"
-                    />
-                    <Select
-                      value={layoutOrcamento.cores?.secundaria || "#64748b"}
-                      onValueChange={(value) => {
-                        setLayoutOrcamento(prev => ({
-                          ...prev,
-                          cores: { ...prev.cores, secundaria: value }
-                        }))
-                      }}
-                    >
-                      <SelectTrigger className="flex-1">
-                        <SelectValue placeholder="Cores predefinidas" />
+                  <div>
+                    <Label htmlFor="fonteTexto">Fonte do Texto</Label>
+                    <Select value={personalizacaoConfig.fonteTexto} onValueChange={(value) => setPersonalizacaoConfig(s => ({ ...s, fonteTexto: value }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a fonte" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="#64748b">Cinza Padrão</SelectItem>
-                        <SelectItem value="#475569">Cinza Escuro</SelectItem>
-                        <SelectItem value="#94a3b8">Cinza Claro</SelectItem>
-                        <SelectItem value="#06b6d4">Ciano</SelectItem>
-                        <SelectItem value="#8b5cf6">Violeta</SelectItem>
-                        <SelectItem value="#ec4899">Rosa</SelectItem>
-                        <SelectItem value="#84cc16">Lima</SelectItem>
-                        <SelectItem value="#eab308">Amarelo</SelectItem>
-                        <SelectItem value="#6b7280">Cinza Neutro</SelectItem>
-                        <SelectItem value="#ffffff">Branco</SelectItem>
+                        <SelectItem value="Inter">Inter</SelectItem>
+                        <SelectItem value="Arial">Arial</SelectItem>
+                        <SelectItem value="Helvetica">Helvetica</SelectItem>
+                        <SelectItem value="Times New Roman">Times New Roman</SelectItem>
+                        <SelectItem value="Georgia">Georgia</SelectItem>
+                        <SelectItem value="Roboto">Roboto</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="corTexto">Cor do Texto</Label>
-                  <Input
-                    id="corTexto"
-                    type="color"
-                    value={layoutOrcamento.cores?.texto || "#1f2937"}
-                    onChange={(e) => {
-                      setLayoutOrcamento(prev => ({
-                        ...prev,
-                        cores: { ...prev.cores, texto: e.target.value }
-                      }))
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-            
-            {/* Tipografia */}
-            <div className="space-y-4">
-              <h4 className="text-md font-medium">Tipografia</h4>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="fonteFamilia">Fonte</Label>
-                  <Select
-                    value={layoutOrcamento.tipografia?.fonteFamilia || "Arial, sans-serif"}
-                    onValueChange={(value) => {
-                      setLayoutOrcamento(prev => ({
-                        ...prev,
-                        tipografia: { ...prev.tipografia, fonteFamilia: value }
-                      }))
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione uma fonte" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Arial, sans-serif">Arial</SelectItem>
-                      <SelectItem value="Helvetica, sans-serif">Helvetica</SelectItem>
-                      <SelectItem value="'Times New Roman', serif">Times New Roman</SelectItem>
-                      <SelectItem value="Georgia, serif">Georgia</SelectItem>
-                      <SelectItem value="'Courier New', monospace">Courier New</SelectItem>
-                      <SelectItem value="Verdana, sans-serif">Verdana</SelectItem>
-                      <SelectItem value="Tahoma, sans-serif">Tahoma</SelectItem>
-                      <SelectItem value="'Trebuchet MS', sans-serif">Trebuchet MS</SelectItem>
-                      <SelectItem value="'Lucida Console', monospace">Lucida Console</SelectItem>
-                      <SelectItem value="Impact, sans-serif">Impact</SelectItem>
-                      <SelectItem value="'Comic Sans MS', cursive">Comic Sans MS</SelectItem>
-                      <SelectItem value="'Palatino Linotype', serif">Palatino Linotype</SelectItem>
-                      <SelectItem value="'Book Antiqua', serif">Book Antiqua</SelectItem>
-                      <SelectItem value="'Lucida Sans Unicode', sans-serif">Lucida Sans Unicode</SelectItem>
-                      <SelectItem value="'MS Sans Serif', sans-serif">MS Sans Serif</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="tamanhoFonte">Tamanho da Fonte</Label>
-                  <Select
-                    value={layoutOrcamento.tipografia?.tamanhoFonte?.toString() || "14"}
-                    onValueChange={(value) => {
-                      setLayoutOrcamento(prev => ({
-                        ...prev,
-                        tipografia: { ...prev.tipografia, tamanhoFonte: parseInt(value) }
-                      }))
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o tamanho" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10px - Muito Pequeno</SelectItem>
-                      <SelectItem value="12">12px - Pequeno</SelectItem>
-                      <SelectItem value="14">14px - Normal</SelectItem>
-                      <SelectItem value="16">16px - Médio</SelectItem>
-                      <SelectItem value="18">18px - Grande</SelectItem>
-                      <SelectItem value="20">20px - Muito Grande</SelectItem>
-                      <SelectItem value="24">24px - Extra Grande</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label>Estilo do Texto</Label>
-                  <div className="flex gap-2">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="negrito"
-                        checked={layoutOrcamento.tipografia?.negrito || false}
-                        onCheckedChange={(checked) => {
-                          setLayoutOrcamento(prev => ({
-                            ...prev,
-                            tipografia: { ...prev.tipografia, negrito: checked as boolean }
-                          }))
-                        }}
-                      />
-                      <Label htmlFor="negrito" className="text-sm font-medium">Negrito</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="italico"
-                        checked={layoutOrcamento.tipografia?.italico || false}
-                        onCheckedChange={(checked) => {
-                          setLayoutOrcamento(prev => ({
-                            ...prev,
-                            tipografia: { ...prev.tipografia, italico: checked as boolean }
-                          }))
-                        }}
-                      />
-                      <Label htmlFor="italico" className="text-sm font-medium">Itálico</Label>
-                    </div>
+                  <div>
+                    <Label htmlFor="tamanhoTitulo">Tamanho dos Títulos (px)</Label>
+                    <Input
+                      id="tamanhoTitulo"
+                      type="number"
+                      value={personalizacaoConfig.tamanhoTitulo}
+                      onChange={(e) => setPersonalizacaoConfig(s => ({ ...s, tamanhoTitulo: parseInt(e.target.value) || 24 }))}
+                      placeholder="24"
+                      min="12"
+                      max="48"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="tamanhoTexto">Tamanho do Texto (px)</Label>
+                    <Input
+                      id="tamanhoTexto"
+                      type="number"
+                      value={personalizacaoConfig.tamanhoTexto}
+                      onChange={(e) => setPersonalizacaoConfig(s => ({ ...s, tamanhoTexto: parseInt(e.target.value) || 14 }))}
+                      placeholder="14"
+                      min="10"
+                      max="24"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="logoPersonalizada">Logo Personalizada (URL)</Label>
+                    <Input
+                      id="logoPersonalizada"
+                      value={personalizacaoConfig.logoPersonalizada}
+                      onChange={(e) => setPersonalizacaoConfig(s => ({ ...s, logoPersonalizada: e.target.value }))}
+                      placeholder="https://exemplo.com/logo-personalizada.png"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="validadeOrcamento">Validade do Orçamento (dias)</Label>
+                    <Input
+                      id="validadeOrcamento"
+                      type="number"
+                      min="1"
+                      max="365"
+                      value={personalizacaoConfig.validadeOrcamento || 30}
+                      onChange={(e) => setPersonalizacaoConfig(s => ({ ...s, validadeOrcamento: parseInt(e.target.value) || 30 }))}
+                      placeholder="30"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Número de dias que o orçamento permanece válido
+                    </p>
                   </div>
                 </div>
-              </div>
-            </div>
+                <Button onClick={handleSalvarPersonalizacao} className="w-full">
+                  Salvar Configurações de Personalização
+                </Button>
+              </CardContent>
+            </Card>
             
-            {/* Configurações */}
-            <div className="space-y-4">
-              <h4 className="text-md font-medium">Configurações</h4>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="validadeDias">Validade da Proposta (dias)</Label>
-                  <Input
-                    id="validadeDias"
-                    type="number"
-                    min="1"
-                    max="365"
-                    value={layoutOrcamento.configuracoes?.validadeDias || 30}
-                    onChange={(e) => {
-                      setLayoutOrcamento(prev => ({
-                        ...prev,
-                        configuracoes: { ...prev.configuracoes, validadeDias: Number(e.target.value) }
-                      }))
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-            
-            {/* Preview */}
-            <div className="space-y-4">
-              <OrcamentoPreview layoutConfig={layoutOrcamento} />
-            </div>
-            
-            <div className="mt-4">
-              <Button onClick={handleSalvarLayoutOrcamento}>Salvar Layout</Button>
-            </div>
-          </CardContent>
-        </Card>
+            {/* Preview dos Documentos */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Preview dos Documentos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DocumentPreview 
+                  layoutConfig={{
+                    primaryColor: personalizacaoConfig.corPrimaria,
+                    secondaryColor: personalizacaoConfig.corSecundaria,
+                    titleFont: personalizacaoConfig.fonteTitulo,
+                    bodyFont: personalizacaoConfig.fonteTexto,
+                    titleSize: personalizacaoConfig.tamanhoTitulo,
+                    bodySize: personalizacaoConfig.tamanhoTexto,
+                    logoUrl: personalizacaoConfig.logoPersonalizada
+                  }}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* Configurações de E-mail SMTP */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Configurações de E-mail (SMTP)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm text-muted-foreground mb-4">
-              Configure o servidor SMTP para envio de orçamentos por e-mail.
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="grid gap-2">
+          <TabsContent value="email" className="space-y-6">
+            {/* Configurações SMTP */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Configurações de E-mail (SMTP)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
                 <Label htmlFor="smtpHost">Servidor SMTP</Label>
                 <Input
                   id="smtpHost"
                   value={smtpConfig.host}
-                  onChange={(e) => setSmtpConfig(prev => ({ ...prev, host: e.target.value }))}
+                  onChange={(e) => setSmtpConfig(s => ({ ...s, host: e.target.value }))}
                   placeholder="smtp.gmail.com"
                 />
               </div>
-              <div className="grid gap-2">
+              <div>
                 <Label htmlFor="smtpPort">Porta</Label>
                 <Input
                   id="smtpPort"
                   type="number"
                   value={smtpConfig.port}
-                  onChange={(e) => setSmtpConfig(prev => ({ ...prev, port: Number(e.target.value) }))}
+                  onChange={(e) => setSmtpConfig(s => ({ ...s, port: parseInt(e.target.value) || 587 }))}
                   placeholder="587"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="smtpUser">Usuário/E-mail</Label>
+              <div>
+                <Label htmlFor="smtpUser">Usuário</Label>
                 <Input
                   id="smtpUser"
-                  type="email"
                   value={smtpConfig.user}
-                  onChange={(e) => setSmtpConfig(prev => ({ ...prev, user: e.target.value }))}
-                  placeholder="seu-email@gmail.com"
+                  onChange={(e) => setSmtpConfig(s => ({ ...s, user: e.target.value }))}
+                  placeholder="usuario@gmail.com"
                 />
               </div>
-              <div className="grid gap-2">
+              <div>
                 <Label htmlFor="smtpPassword">Senha</Label>
                 <Input
                   id="smtpPassword"
                   type="password"
                   value={smtpConfig.password}
-                  onChange={(e) => setSmtpConfig(prev => ({ ...prev, password: e.target.value }))}
-                  placeholder="Sua senha ou senha de app"
+                  onChange={(e) => setSmtpConfig(s => ({ ...s, password: e.target.value }))}
+                  placeholder="senha"
                 />
               </div>
-              <div className="grid gap-2">
+              <div>
                 <Label htmlFor="smtpFromName">Nome do Remetente</Label>
                 <Input
                   id="smtpFromName"
                   value={smtpConfig.fromName}
-                  onChange={(e) => setSmtpConfig(prev => ({ ...prev, fromName: e.target.value }))}
+                  onChange={(e) => setSmtpConfig(s => ({ ...s, fromName: e.target.value }))}
                   placeholder="Sua Empresa"
                 />
               </div>
-              <div className="grid gap-2">
+              <div>
                 <Label htmlFor="smtpFromEmail">E-mail do Remetente</Label>
                 <Input
                   id="smtpFromEmail"
                   type="email"
                   value={smtpConfig.fromEmail}
-                  onChange={(e) => setSmtpConfig(prev => ({ ...prev, fromEmail: e.target.value }))}
+                  onChange={(e) => setSmtpConfig(s => ({ ...s, fromEmail: e.target.value }))}
                   placeholder="noreply@suaempresa.com"
                 />
               </div>
             </div>
-            <div className="flex items-center space-x-2 mt-4">
+            <div className="flex items-center space-x-2">
               <Checkbox
                 id="smtpSecure"
                 checked={smtpConfig.secure}
-                onCheckedChange={(checked) => setSmtpConfig(prev => ({ ...prev, secure: Boolean(checked) }))}
+                onCheckedChange={(checked) => setSmtpConfig(s => ({ ...s, secure: !!checked }))}
               />
-              <Label htmlFor="smtpSecure">Usar SSL/TLS (porta 465)</Label>
+              <Label htmlFor="smtpSecure">Usar SSL/TLS</Label>
             </div>
-            <div className="flex gap-2 mt-4">
-              <Button onClick={handleSalvarSMTP}>Salvar Configurações SMTP</Button>
-              <Button 
-                variant="outline" 
-                onClick={handleTestarConexaoSMTP}
-                disabled={testingConnection}
-              >
-                {testingConnection ? "Testando..." : "Testar Conexão"}
+                <div className="flex gap-2">
+                  <Button onClick={handleSalvarSmtp} className="flex-1">
+                    Salvar Configurações SMTP
+                  </Button>
+                  <Button 
+                    onClick={handleTestarSmtp} 
+                    variant="outline"
+                    disabled={testingEmail}
+                    className="min-w-[140px]"
+                  >
+                    {testingEmail ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                        Testando...
+                      </>
+                    ) : (
+                      "Testar Conexão"
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="backup" className="space-y-6">
+            {/* Backup Local */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Backup Local</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+            <div className="flex gap-4">
+              <Button onClick={handleExportarBackup} variant="outline" className="flex-1">
+                Exportar Backup
               </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Backup de Dados */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Backup de Dados</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Exporte e importe um arquivo .json contendo clientes, produtos, pedidos, recebimentos, usuários,
-              configurações e sequência de pedidos.
-            </p>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button onClick={handleExport}>Exportar (.json)</Button>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/json"
-                onChange={handleImportFile}
-                className="hidden"
-              />
               <Button
+                onClick={() => fileInputRef.current?.click()}
                 variant="outline"
-                onClick={() => {
-                  fileInputRef.current?.click()
-                }}
+                className="flex-1"
               >
-                Importar (.json)
+                Importar Backup
               </Button>
-
-              <div className="flex items-center gap-2">
-                <Checkbox id="merge" checked={mergeImport} onCheckedChange={(v) => setMergeImport(Boolean(v))} />
-                <label htmlFor="merge" className="text-sm">
-                  Mesclar com dados existentes (não remove registros)
-                </label>
-              </div>
             </div>
-            {!mergeImport && (
-              <p className="text-xs text-amber-600">
-                Atenção: ao importar sem mescla, todos os dados atuais serão substituídos pelos do arquivo.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </main>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="mergeImport"
+                checked={mergeImport}
+                onCheckedChange={(checked) => setMergeImport(!!checked)}
+              />
+              <Label htmlFor="mergeImport">Mesclar dados (não substituir)</Label>
+            </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  style={{ display: 'none' }}
+                  onChange={handleImportarBackup}
+                />
+              </CardContent>
+            </Card>
+
+
+
+
+
+            {/* Agendamento Automático */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Agendamento Automático</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="autoBackupEnabled"
+                        checked={backupConfig.autoBackupEnabled}
+                        onCheckedChange={(checked) => setBackupConfig(s => ({ ...s, autoBackupEnabled: !!checked }))}
+                      />
+                      <Label htmlFor="autoBackupEnabled">Ativar backup automático</Label>
+                    </div>
+                  </div>
+                  
+                  {backupConfig.autoBackupEnabled && (
+                    <>
+                      <div>
+                        <Label htmlFor="backupFrequency">Frequência do Backup</Label>
+                        <Select 
+                          value={backupConfig.backupFrequency} 
+                          onValueChange={(value) => setBackupConfig(s => ({ ...s, backupFrequency: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a frequência" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="daily">Diário</SelectItem>
+                            <SelectItem value="every2days">A cada 2 dias</SelectItem>
+                            <SelectItem value="every3days">A cada 3 dias</SelectItem>
+                            <SelectItem value="weekly">Semanal</SelectItem>
+                            <SelectItem value="monthly">Mensal</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="backupTime">Horário do Backup</Label>
+                        <Input
+                          id="backupTime"
+                          type="time"
+                          value={backupConfig.backupTime}
+                          onChange={(e) => setBackupConfig(s => ({ ...s, backupTime: e.target.value }))}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Horário em que o backup será executado automaticamente
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="keepLocalBackup"
+                            checked={backupConfig.keepLocalBackup}
+                            onCheckedChange={(checked) => setBackupConfig(s => ({ ...s, keepLocalBackup: !!checked }))}
+                          />
+                          <Label htmlFor="keepLocalBackup">Manter cópia local do backup</Label>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="maxBackups">Máximo de Backups Mantidos</Label>
+                        <Input
+                          id="maxBackups"
+                          type="number"
+                          min="1"
+                          max="30"
+                          value={backupConfig.maxBackups}
+                          onChange={(e) => setBackupConfig(s => ({ ...s, maxBackups: parseInt(e.target.value) || 7 }))}
+                          placeholder="7"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Número máximo de backups a serem mantidos (os mais antigos serão removidos)
+                        </p>
+                      </div>
+                      
+                      {backupConfig.lastBackup && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                          <p className="text-sm text-blue-700">
+                            Último backup: {new Date(backupConfig.lastBackup).toLocaleString('pt-BR')}
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+                
+                <Button onClick={handleSalvarBackupConfig} className="w-full">
+                  Salvar Configurações de Backup
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="usuarios" className="space-y-6">
+            <UsuariosManagement />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }

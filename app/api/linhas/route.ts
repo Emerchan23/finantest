@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '../../../lib/db'
 import { v4 as uuidv4 } from 'uuid'
 
-// Criar tabela linhas_venda se não existir
-db.exec(`
+// Criar tabela linhas se não existir (apenas em runtime)
+if (process.env.NEXT_PHASE !== 'phase-production-build' && db.exec) {
+  db.exec(`
   CREATE TABLE IF NOT EXISTS linhas_venda (
     id TEXT PRIMARY KEY,
-    companyId TEXT,
     dataPedido TEXT NOT NULL,
     numeroOF TEXT,
     numeroDispensa TEXT,
@@ -30,6 +30,7 @@ db.exec(`
     createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 `);
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,7 +52,6 @@ export async function POST(request: NextRequest) {
     const id = uuidv4()
     
     const {
-      companyId,
       dataPedido,
       numeroOF,
       numeroDispensa,
@@ -76,13 +76,13 @@ export async function POST(request: NextRequest) {
     
     db.prepare(`
       INSERT INTO linhas_venda (
-        id, companyId, dataPedido, numeroOF, numeroDispensa, cliente, produto, modalidade,
+        id, dataPedido, numeroOF, numeroDispensa, cliente, produto, modalidade,
         valorVenda, taxaCapitalPerc, taxaCapitalVl, taxaImpostoPerc, taxaImpostoVl,
         custoMercadoria, somaCustoFinal, lucroValor, lucroPerc, dataRecebimento,
         paymentStatus, settlementStatus, acertoId, cor, createdAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, companyId, dataPedido, numeroOF, numeroDispensa, cliente, produto, modalidade,
+      id, dataPedido, numeroOF, numeroDispensa, cliente, produto, modalidade,
       valorVenda || 0, taxaCapitalPerc || 0, taxaCapitalVl || 0, taxaImpostoPerc || 0, taxaImpostoVl || 0,
       custoMercadoria || 0, somaCustoFinal || 0, lucroValor || 0, lucroPerc || 0, dataRecebimento,
       paymentStatus || 'pendente', settlementStatus, acertoId, cor, new Date().toISOString()

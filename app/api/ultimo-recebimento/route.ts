@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '../../../lib/db'
 import { v4 as uuidv4 } from 'uuid'
 
-// Criar tabela ultimo_recebimento se não existir
-db.exec(`
+// Criar tabela ultimo_recebimento se não existir (apenas em runtime)
+if (process.env.NEXT_PHASE !== 'phase-production-build' && db.exec) {
+  db.exec(`
   CREATE TABLE IF NOT EXISTS ultimo_recebimento (
     id TEXT PRIMARY KEY,
     nome TEXT,
@@ -15,6 +16,7 @@ db.exec(`
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
+}
 
 export async function GET() {
   try {

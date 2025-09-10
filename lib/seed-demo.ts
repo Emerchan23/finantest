@@ -3,7 +3,7 @@ import { uid } from './util'
 
 // Get or create default company for demo data
 function getDefaultCompanyId(): string {
-  const row = db.prepare(`SELECT id FROM empresas LIMIT 1`).get() as any
+  const row = db.prepare(`SELECT id FROM empresas LIMIT 1`).get() as { id: string } | undefined
   if (row?.id) return row.id
   
   // Create a default company if none exists
@@ -19,7 +19,7 @@ function getDefaultCompanyId(): string {
 const defaultCompanyId = getDefaultCompanyId()
 
 function ensureCliente(nome: string, documento: string) {
-  const row = db.prepare(`SELECT id FROM clientes WHERE nome=? AND empresa_id=?`).get(nome, defaultCompanyId) as any
+  const row = db.prepare(`SELECT id FROM clientes WHERE nome=? AND empresa_id=?`).get(nome, defaultCompanyId) as { id: string } | undefined
   if (row?.id) return row.id
   
   const id = uid()
@@ -37,7 +37,7 @@ function ensureCliente(nome: string, documento: string) {
 }
 
 function ensureProduto(nome: string, preco: number, categoria: string) {
-  const row = db.prepare(`SELECT id FROM produtos WHERE nome=? AND empresa_id=?`).get(nome, defaultCompanyId) as any
+  const row = db.prepare(`SELECT id FROM produtos WHERE nome=? AND empresa_id=?`).get(nome, defaultCompanyId) as { id: string } | undefined
   if (row?.id) return row.id
   
   const id = uid()

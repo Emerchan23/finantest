@@ -31,67 +31,67 @@ export async function GET() {
       : db.prepare("SELECT * FROM orcamentos ORDER BY created_at DESC").all()
     const orcamentoItens = db.prepare("SELECT * FROM orcamento_itens ORDER BY created_at DESC").all()
     // Buscar dados das tabelas que existem, com tratamento de erro para tabelas que podem não existir
-    let linhasVenda: any[] = []
+    let linhasVenda: Record<string, unknown>[] = []
     try {
       linhasVenda = companyId
-        ? db.prepare("SELECT * FROM linhas_venda WHERE companyId = ? ORDER BY createdAt DESC").all(companyId)
-        : db.prepare("SELECT * FROM linhas_venda ORDER BY createdAt DESC").all()
+        ? db.prepare("SELECT * FROM linhas_venda WHERE companyId = ? ORDER BY createdAt DESC").all(companyId) as Record<string, unknown>[]
+        : db.prepare("SELECT * FROM linhas_venda ORDER BY createdAt DESC").all() as Record<string, unknown>[]
     } catch (e) {
       console.warn('Tabela linhas_venda não existe:', e)
     }
     
-    let acertos: any[] = []
+    let acertos: Record<string, unknown>[] = []
     try {
-      acertos = db.prepare("SELECT * FROM acertos ORDER BY created_at DESC").all()
+      acertos = db.prepare("SELECT * FROM acertos ORDER BY created_at DESC").all() as Record<string, unknown>[]
     } catch (e) {
       console.warn('Tabela acertos não existe:', e)
     }
     
-    let participantes: any[] = []
+    let participantes: Record<string, unknown>[] = []
     try {
-      participantes = db.prepare("SELECT * FROM participantes ORDER BY created_at DESC").all()
+      participantes = db.prepare("SELECT * FROM participantes ORDER BY created_at DESC").all() as Record<string, unknown>[]
     } catch (e) {
       console.warn('Tabela participantes não existe:', e)
     }
     
-    let despesasPendentes: any[] = []
+    let despesasPendentes: Record<string, unknown>[] = []
     try {
-      despesasPendentes = db.prepare("SELECT * FROM despesas_pendentes ORDER BY created_at DESC").all()
+      despesasPendentes = db.prepare("SELECT * FROM despesas_pendentes ORDER BY created_at DESC").all() as Record<string, unknown>[]
     } catch (e) {
       console.warn('Tabela despesas_pendentes não existe:', e)
     }
     
-    let modalidades: any[] = []
+    let modalidades: Record<string, unknown>[] = []
     try {
-      modalidades = db.prepare("SELECT * FROM modalidades ORDER BY created_at DESC").all()
+      modalidades = db.prepare("SELECT * FROM modalidades ORDER BY created_at DESC").all() as Record<string, unknown>[]
     } catch (e) {
       console.warn('Tabela modalidades não existe:', e)
     }
     
-    let taxas: any[] = []
+    let taxas: Record<string, unknown>[] = []
     try {
-      taxas = db.prepare("SELECT * FROM taxas ORDER BY created_at DESC").all()
+      taxas = db.prepare("SELECT * FROM taxas ORDER BY created_at DESC").all() as Record<string, unknown>[]
     } catch (e) {
       console.warn('Tabela taxas não existe:', e)
     }
     
-    let outrosNegocios: any[] = []
+    let outrosNegocios: Record<string, unknown>[] = []
     try {
-      outrosNegocios = db.prepare("SELECT * FROM outros_negocios ORDER BY created_at DESC").all()
+      outrosNegocios = db.prepare("SELECT * FROM outros_negocios ORDER BY created_at DESC").all() as Record<string, unknown>[]
     } catch (e) {
       console.warn('Tabela outros_negocios não existe:', e)
     }
     
-    let pagamentosParciais: any[] = []
+    let pagamentosParciais: Record<string, unknown>[] = []
     try {
-      pagamentosParciais = db.prepare("SELECT * FROM pagamentos_parciais ORDER by created_at DESC").all()
+      pagamentosParciais = db.prepare("SELECT * FROM pagamentos_parciais ORDER by created_at DESC").all() as Record<string, unknown>[]
     } catch (e) {
       console.warn('Tabela pagamentos_parciais não existe:', e)
     }
     
-    let valeMovimentos: any[] = []
+    let valeMovimentos: Record<string, unknown>[] = []
     try {
-      valeMovimentos = db.prepare("SELECT * FROM vale_movimentos ORDER BY created_at DESC").all()
+      valeMovimentos = db.prepare("SELECT * FROM vale_movimentos ORDER BY created_at DESC").all() as Record<string, unknown>[]
     } catch (e) {
       console.warn('Tabela vale_movimentos não existe:', e)
     }
@@ -123,7 +123,7 @@ export async function GET() {
           currentEmpresaId: companyId
         } : {},
         // Sequência de orçamentos (se existir)
-        seqOrcamento: orcamentos.length > 0 ? Math.max(...orcamentos.map((o: any) => o.numero || 0)) : 0
+        seqOrcamento: orcamentos.length > 0 ? Math.max(...(orcamentos as Record<string, unknown>[]).map((o: Record<string, unknown>) => (o.numero as number) || 0)) : 0
       }
     }
     

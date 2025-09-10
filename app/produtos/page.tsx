@@ -3,14 +3,15 @@
 import { useEffect, useMemo, useState } from "react"
 import { AppHeader } from "@/components/app-header"
 import { type Produto, ensureInit, getProdutos, deleteProduto } from "@/lib/data-store"
-import { ensureDefaultEmpresa } from "@/lib/empresas"
+// Removed empresa imports - system simplified
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import ProductForm from "@/components/product-form"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { ExternalLink, Pencil, Plus, Trash2 } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { ExternalLink, Pencil, Search, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 function brl(n: number) {
@@ -21,12 +22,11 @@ export default function ProdutosPage() {
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Produto | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
   const { toast } = useToast()
 
   async function refresh() {
     try {
-      // Garantir que existe uma empresa padrão selecionada
-      await ensureDefaultEmpresa()
       const produtos = await getProdutos()
       setProdutos(produtos)
     } catch (error) {
@@ -39,9 +39,22 @@ export default function ProdutosPage() {
   }, [])
 
   const columns = useMemo(
-    () => ["Produto", "Marca", "Preço", "Custo", "Estoque", "Custo ref.", "Link ref.", "Ações"],
+    () => ["Produto", "Marca", "Categoria", "Preço", "Custo", "Estoque", "Custo ref.", "Link ref.", "Ações"],
     [],
   )
+
+  // Filtrar produtos baseado no termo de busca
+  const produtosFiltrados = useMemo(() => {
+    if (!searchTerm.trim()) return produtos
+    
+    const termo = searchTerm.toLowerCase().trim()
+    return produtos.filter(produto => 
+      produto.nome.toLowerCase().includes(termo) ||
+      produto.id.toLowerCase().includes(termo) ||
+      (produto.marca && produto.marca.toLowerCase().includes(termo)) ||
+      (produto.descricao && produto.descricao.toLowerCase().includes(termo))
+    )
+  }, [produtos, searchTerm])
 
   return (
     <div className="min-h-screen">
@@ -51,18 +64,11 @@ export default function ProdutosPage() {
           <h1 className="text-2xl font-semibold">Produtos</h1>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button
-                onClick={() => {
-                  setEditing(null)
-                  setOpen(true)
-                }}
-              >
-                <Plus className="mr-2 h-4 w-4" /> Novo produto
-              </Button>
+              <Button onClick={() => setEditing(null)}>Adicionar produto</Button>
             </DialogTrigger>
             <DialogContent className="max-w-3xl">
               <DialogHeader>
-                <DialogTitle>{editing ? "Editar produto" : "Cadastrar produto"}</DialogTitle>
+                <DialogTitle>Editar produto</DialogTitle>
               </DialogHeader>
               <ProductForm
                 initial={editing}
@@ -77,7 +83,18 @@ export default function ProdutosPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Seu catálogo</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Seu catálogo</CardTitle>
+              <div className="relative w-80">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nome, código ou marca..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="overflow-auto">
             <Table>
@@ -89,7 +106,7 @@ export default function ProdutosPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {produtos.map((p) => (
+                {produtosFiltrados.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell className="whitespace-nowrap">
                       <div className="font-medium">{p.nome}</div>
@@ -101,6 +118,7 @@ export default function ProdutosPage() {
                       )}
                     </TableCell>
                     <TableCell>{p.marca || "-"}</TableCell>
+                    <TableCell>{p.categoria || "-"}</TableCell>
                     <TableCell>{brl(p.precoVenda)}</TableCell>
                     <TableCell>{brl(p.custo)}</TableCell>
                     <TableCell>{p.estoque ?? 0}</TableCell>
@@ -112,7 +130,7 @@ export default function ProdutosPage() {
                     <TableCell>
                       {p.linkRef ? (
                         <a
-                          href={p.linkRef}
+                          href={p.linkRef.startsWith('http://') || p.linkRef.startsWith('https://') ? p.linkRef : `https://${p.linkRef}`}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex items-center gap-1 text-sm text-primary underline underline-offset-2"
@@ -145,9 +163,30 @@ export default function ProdutosPage() {
                             await deleteProduto(p.id)
                             await refresh()
                             toast({ title: "Produto excluído" })
-                          } catch (error) {
+                          } catch (error: any) {
                             console.error('Erro ao excluir produto:', error)
-                            toast({ title: "Erro ao excluir produto", variant: "destructive" })
+                            if (error?.status === 400) {
+                              try {
+                                const response = await fetch(`/api/produtos/${p.id}/dependencies`)
+                                const dependencies = await response.json()
+                                
+                                let detailsMessage = `Não é possível excluir o produto "${p.nome}" porque ele está sendo usado em:\n\n`
+                                if (dependencies.orcamento_itens?.count > 0) detailsMessage += `• ${dependencies.orcamento_itens.count} item(ns) de orçamento\n`
+                                if (dependencies.linhas_venda?.count > 0) detailsMessage += `• ${dependencies.linhas_venda.count} linha(s) de venda\n`
+                                if (dependencies.vendas?.count > 0) detailsMessage += `• ${dependencies.vendas.count} venda(s)\n`
+                                detailsMessage += "\nExclua primeiro esses registros para poder deletar o produto."
+                                
+                                alert(detailsMessage)
+                              } catch {
+                                toast({
+                                  title: "Não é possível excluir",
+                                  description: "Este produto possui registros associados. Exclua primeiro os registros relacionados.",
+                                  variant: "destructive",
+                                })
+                              }
+                            } else {
+                              toast({ title: "Erro ao excluir produto", variant: "destructive" })
+                            }
                           }
                         }}
                         title="Excluir"
@@ -161,6 +200,13 @@ export default function ProdutosPage() {
                   <TableRow>
                     <TableCell colSpan={columns.length} className="text-center text-muted-foreground">
                       Nenhum produto cadastrado.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {produtos.length > 0 && produtosFiltrados.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={columns.length} className="text-center text-muted-foreground">
+                      Nenhum produto encontrado para "{searchTerm}".
                     </TableCell>
                   </TableRow>
                 )}

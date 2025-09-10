@@ -39,13 +39,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ManageModalidadesDialog } from "@/components/manage-modalidades-dialog"
 import { getModalidades, type Modalidade } from "@/lib/modalidades"
 import { Switch } from "@/components/ui/switch"
-import {
-  ensureDefaultEmpresa,
-  getCurrentEmpresaId,
-  getEmpresas,
-  setCurrentEmpresaId,
-  type Empresa,
-} from "@/lib/empresas"
+// Removed empresa imports - system simplified
 import { getClientes, type Cliente } from "@/lib/data-store"
 import ClienteCombobox from "@/components/cliente-combobox"
 
@@ -81,10 +75,9 @@ export default function VendasPlanilhaPage() {
   const searchParams = useSearchParams()
   
   // Estados principais
-  const [empresas, setEmpresas] = useState<Empresa[]>([])
-  const [empresaId, setEmpresaId] = useState<string>("")
   const [linhas, setLinhas] = useState<LinhaVenda[]>([])
   const [filtro, setFiltro] = useState("")
+  const [anoSelecionado, setAnoSelecionado] = useState<number>(new Date().getFullYear())
   const [prefs, setPrefs] = useState<Prefs>(() => {
     const visible = Object.fromEntries(allColumns.map((c) => [c.key, !!c.essential])) as Record<string, boolean>
     return { visible, density: "compact" }
@@ -118,13 +111,6 @@ export default function VendasPlanilhaPage() {
   useEffect(() => {
     const initializeData = async () => {
       try {
-        await ensureDefaultEmpresa()
-        const empresasList = await getEmpresas()
-        setEmpresas(empresasList)
-        
-        const currentId = (await getCurrentEmpresaId()) || (empresasList[0]?.id ?? "")
-        setEmpresaId(currentId)
-        
         await Promise.all([
           refreshLinhas(),
           refreshRates(),
@@ -195,34 +181,18 @@ export default function VendasPlanilhaPage() {
     }
   }
 
-  // Atualizar linhas quando empresa mudar
-  useEffect(() => {
-    if (empresaId) {
-      refreshLinhas()
-    }
-  }, [empresaId])
-
-  // Função para trocar empresa
-  const handleEmpresaChange = async (novaEmpresaId: string) => {
-    try {
-      await setCurrentEmpresaId(novaEmpresaId)
-      setEmpresaId(novaEmpresaId)
-      
-      // Recarregar dados após mudança de empresa
-      await Promise.all([
-        refreshLinhas(),
-        refreshRates(),
-        refreshModalidades(),
-        refreshClientes()
-      ])
-    } catch (error) {
-      console.error('Erro ao trocar empresa:', error)
-    }
-  }
+  // Removed empresa change handlers - system simplified
 
   // Filtrar linhas
   const linhasFiltradas = useMemo(() => {
     let filtered = linhas
+    
+    // Filtro por ano
+    filtered = filtered.filter(linha => {
+      if (!linha.dataPedido) return true
+      const dataLinha = new Date(linha.dataPedido)
+      return dataLinha.getFullYear() === anoSelecionado
+    })
     
     if (filtro) {
       const termo = filtro.toLowerCase()
@@ -239,7 +209,7 @@ export default function VendasPlanilhaPage() {
     }
     
     return filtered
-  }, [linhas, filtro, onlyPendAcerto])
+  }, [linhas, filtro, onlyPendAcerto, anoSelecionado])
 
   // Cálculos de métricas
   const metrics = useMemo(() => {
@@ -273,17 +243,32 @@ export default function VendasPlanilhaPage() {
       try {
         await deleteLinha(id)
         await refreshLinhas()
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erro ao excluir linha:', error)
-        alert('Erro ao excluir linha')
+        if (error?.status === 400) {
+          try {
+            const response = await fetch(`/api/vendas/${id}/dependencies`)
+            const dependencies = await response.json()
+            
+            let detailsMessage = `Não é possível excluir esta linha de venda porque ela está sendo usada em:\n\n`
+            if (dependencies.acertos_relacionados?.count > 0) detailsMessage += `• ${dependencies.acertos_relacionados.count} acerto(s)\n`
+            if (dependencies.pagamentos_relacionados?.count > 0) detailsMessage += `• ${dependencies.pagamentos_relacionados.count} pagamento(s)\n`
+            detailsMessage += "\nExclua primeiro esses registros para poder deletar a linha de venda."
+            
+            alert(detailsMessage)
+          } catch {
+            alert("Não é possível excluir esta linha de venda pois ela possui registros associados. Exclua primeiro os registros relacionados.")
+          }
+        } else {
+          alert('Erro ao excluir linha')
+        }
       }
     }
   }
 
   const handleSalvarLinha = async (linha: Partial<LinhaVenda>) => {
     try {
-      console.log('Dados sendo salvos:', linha)
-      console.log('Data Recebimento:', linha.dataRecebimento)
+
       await saveLinha(linha as Omit<LinhaVenda, "id" | "createdAt"> & { id?: string })
       setOpenDialog(false)
       setEditing(null)
@@ -354,26 +339,6 @@ export default function VendasPlanilhaPage() {
       <AppHeader />
       
       <main className="container mx-auto p-6 space-y-6">
-        {/* Seletor de empresa */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Empresa Atual</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Select value={empresaId} onValueChange={handleEmpresaChange}>
-              <SelectTrigger className="w-full max-w-md">
-                <SelectValue placeholder="Selecione uma empresa" />
-              </SelectTrigger>
-              <SelectContent>
-                {empresas.filter(empresa => empresa && empresa.id && empresa.nome).map((empresa) => (
-                  <SelectItem key={empresa.id} value={empresa.id}>
-                    {empresa.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
 
         {/* Métricas */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -413,6 +378,26 @@ export default function VendasPlanilhaPage() {
                   value={filtro}
                   onChange={(e) => setFiltro(e.target.value)}
                 />
+              </div>
+              
+              {/* Seletor de Ano */}
+              <div className="flex flex-col space-y-1">
+                <Label htmlFor="ano-selector" className="text-xs text-gray-600">Ano</Label>
+                <Select value={anoSelecionado.toString()} onValueChange={(value) => setAnoSelecionado(parseInt(value))}>
+                  <SelectTrigger className="w-[120px]" id="ano-selector">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 10 }, (_, i) => {
+                      const ano = new Date().getFullYear() - 5 + i
+                      return (
+                        <SelectItem key={ano} value={ano.toString()}>
+                          {ano}
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
               </div>
               
               {/* Switch para acertos pendentes */}
@@ -708,8 +693,7 @@ function EditDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('FormData no handleSubmit:', formData)
-    console.log('Data Recebimento no formData:', formData.dataRecebimento)
+
     onSaved(formData)
   }
 
@@ -728,7 +712,7 @@ function EditDialog({
       // Processar campo de data para garantir formato correto
       if (field === 'dataRecebimento') {
         processedValue = value || '' // Manter o valor da data como string no formato YYYY-MM-DD
-        console.log('Campo dataRecebimento alterado:', value)
+
       }
       
       const updated = { ...prev, [field]: processedValue }

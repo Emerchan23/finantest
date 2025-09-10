@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -68,6 +68,9 @@ export function ManageModalidadesDialog({
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>Gerenciar Modalidades</DialogTitle>
+          <DialogDescription>
+            Adicione e gerencie as modalidades de venda utilizadas nos orçamentos.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-5 gap-2">

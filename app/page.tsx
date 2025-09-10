@@ -11,6 +11,8 @@ import { AppHeader } from "@/components/app-header"
 import { MetricCard } from "@/components/metric-card"
 import { OverviewChart } from "@/components/charts/overview-chart"
 import { fmtCurrency } from "@/lib/format"
+import ProtectedRoute from "@/components/ProtectedRoute"
+import { useAuth } from "@/contexts/AuthContext"
 
 type DashboardData = {
   totals: {
@@ -22,11 +24,14 @@ type DashboardData = {
     totalVendas: number
     pendentes: number
   }
-  series: { name: string; vendas: number; lucros: number; impostos: number }[]
+  series: { name: string; vendas: number; lucros: number; impostos: number; despesas: number; lucroLiquido: number }[]
   summary: {
     totalClientes: number
+    totalProdutos: number
     totalPedidos: number
     pedidosPendentes: number
+    orcamentosAprovados: number
+    orcamentosPendentes: number
   }
   alerts: { id: string; type: string; title: string; message: string; timestamp: string }[]
   lastUpdate: string
@@ -34,11 +39,13 @@ type DashboardData = {
 
 export default function HomePage() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
+  const { usuario } = useAuth()
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [chartType, setChartType] = useState<"bar" | "line">("bar")
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
+  const [selectedSemester, setSelectedSemester] = useState<string | undefined>(undefined)
 
 
   const loadUserAndData = async () => {
@@ -46,12 +53,12 @@ export default function HomePage() {
       setLoading(true)
       setError(null)
       
-      console.log("Carregando dados do dashboard...")
+  
         
         try {
           const [totals, series, summary, alerts] = await Promise.all([
             getDashboardTotals(),
-            getDashboardSeries(),
+            getDashboardSeries(selectedYear, selectedSemester),
             getDashboardSummary(),
             getDashboardAlerts()
           ])
@@ -64,23 +71,37 @@ export default function HomePage() {
             lastUpdate: new Date().toLocaleTimeString('pt-BR')
           })
           
-          console.log("📊 Dados do dashboard carregados:", { totals, series, summary, alerts })
-          console.log('💰 Total a Receber atual:', totals.totalAReceber)
+          
         } catch (err: any) {
-          console.error("Erro ao carregar dados do dashboard:", err)
           setError(`Erro ao carregar dados do dashboard: ${err.message}`)
         }
     } catch (err: any) {
-      console.error("Erro ao carregar dados:", err)
       setError(`Erro: ${err.message}`)
     } finally {
       setLoading(false)
     }
   }
 
+  // Função para recarregar apenas os dados do gráfico
+  const loadChartData = async () => {
+    try {
+      const series = await getDashboardSeries(selectedYear, selectedSemester)
+      setDashboardData(prev => prev ? { ...prev, series } : null)
+    } catch (err: any) {
+      // Erro silencioso para não interromper a experiência do usuário
+    }
+  }
+
   useEffect(() => {
     loadUserAndData()
   }, [])
+
+  // Recarregar dados do gráfico quando ano ou semestre mudarem
+  useEffect(() => {
+    if (dashboardData) {
+      loadChartData()
+    }
+  }, [selectedYear, selectedSemester])
 
 
 
@@ -138,8 +159,9 @@ export default function HomePage() {
   const { totals, series, summary, alerts, lastUpdate } = dashboardData
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <AppHeader />
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gray-50">
+        <AppHeader />
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-6">
           {/* Header */}
@@ -201,6 +223,46 @@ export default function HomePage() {
                     onClick={() => setChartType("line")}
                   >
                     Linhas
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Controles de Ano e Semestre */}
+              <div className="flex flex-wrap gap-2 mt-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">Ano:</label>
+                  <select 
+                    value={selectedYear} 
+                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                    className="px-3 py-1 border rounded-md text-sm"
+                  >
+                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="flex gap-2">
+                  <Button 
+                    variant={selectedSemester === undefined ? "default" : "outline"} 
+                    size="sm"
+                    onClick={() => setSelectedSemester(undefined)}
+                  >
+                    Ano Todo
+                  </Button>
+                  <Button 
+                    variant={selectedSemester === "1" ? "default" : "outline"} 
+                    size="sm"
+                    onClick={() => setSelectedSemester("1")}
+                  >
+                    1º Semestre
+                  </Button>
+                  <Button 
+                    variant={selectedSemester === "2" ? "default" : "outline"} 
+                    size="sm"
+                    onClick={() => setSelectedSemester("2")}
+                  >
+                    2º Semestre
                   </Button>
                 </div>
               </div>
@@ -273,19 +335,28 @@ export default function HomePage() {
                     <span className="text-sm font-medium">{summary?.totalClientes || 0}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Pedidos</span>
+                    <span className="text-sm text-gray-600">Pedidos Concluídos</span>
                     <span className="text-sm font-medium">{summary?.totalPedidos || 0}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Pedidos Pendentes</span>
+                    <span className="text-sm text-gray-600">Vendas Pendentes</span>
                     <span className="text-sm font-medium">{summary?.pedidosPendentes || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Orçamentos Aprovados</span>
+                    <span className="text-sm font-medium">{summary?.orcamentosAprovados || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Orçamentos Pendentes</span>
+                    <span className="text-sm font-medium">{summary?.orcamentosPendentes || 0}</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
         </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </ProtectedRoute>
   )
 }

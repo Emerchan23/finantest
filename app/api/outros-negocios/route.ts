@@ -4,8 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(request: NextRequest) {
   try {
-    // Create table if it doesn't exist
-    db.exec(`
+    // Create table if it doesn't exist (apenas em runtime)
+    if (process.env.NEXT_PHASE !== 'phase-production-build' && db.exec) {
+      db.exec(`
       CREATE TABLE IF NOT EXISTS outros_negocios (
         id TEXT PRIMARY KEY,
         tipo TEXT NOT NULL,
@@ -26,19 +27,22 @@ export async function GET(request: NextRequest) {
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `);
-
-    // Add multa_ativa column if it doesn't exist (for existing databases)
-    try {
-      db.exec(`ALTER TABLE outros_negocios ADD COLUMN multa_ativa INTEGER DEFAULT 0`);
-    } catch (error) {
-      // Column already exists, ignore error
     }
 
-    // Add multa_percent column if it doesn't exist (for existing databases)
-    try {
-      db.exec(`ALTER TABLE outros_negocios ADD COLUMN multa_percent REAL DEFAULT 0`);
-    } catch (error) {
-      // Column already exists, ignore error
+    // Add multa_ativa column if it doesn't exist (for existing databases)
+    if (process.env.NEXT_PHASE !== 'phase-production-build' && db.exec) {
+      try {
+        db.exec(`ALTER TABLE outros_negocios ADD COLUMN multa_ativa INTEGER DEFAULT 0`);
+      } catch (error) {
+        // Column already exists, ignore error
+      }
+
+      // Add multa_percent column if it doesn't exist (for existing databases)
+      try {
+        db.exec(`ALTER TABLE outros_negocios ADD COLUMN multa_percent REAL DEFAULT 0`);
+      } catch (error) {
+        // Column already exists, ignore error
+      }
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -131,6 +135,14 @@ export async function POST(request: NextRequest) {
     if (!tipo || !descricao || !valor || !data_transacao) {
       return NextResponse.json(
         { error: 'Campos obrigatórios: tipo, descricao, valor, data_transacao' },
+        { status: 400 }
+      );
+    }
+    
+    // Validate tipo field
+    if (tipo !== 'receita' && tipo !== 'despesa') {
+      return NextResponse.json(
+        { error: 'Campo tipo deve ser "receita" ou "despesa"' },
         { status: 400 }
       );
     }

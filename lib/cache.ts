@@ -19,7 +19,7 @@ export const CACHE_TTL = {
 export const CACHE_KEYS = {
   dashboardTotals: (companyId: string) => `dashboard:totals:${companyId}`,
   dashboardSeries: (companyId: string) => `dashboard:series:${companyId}`,
-  empresaConfig: (empresaId: string) => `config:empresa:${empresaId}`,
+  // Removed empresaConfig - system simplified
   userPrefs: (userId: string) => `prefs:user:${userId}`,
   listClientes: (companyId: string) => `list:clientes:${companyId}`,
   listProdutos: (companyId: string) => `list:produtos:${companyId}`,

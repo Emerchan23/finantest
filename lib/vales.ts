@@ -120,3 +120,41 @@ export async function getSaldosPorCliente(): Promise<Record<string, number>> {
     return {}
   }
 }
+
+export async function getSaldosPorClientePorAno(ano: number): Promise<Record<string, number>> {
+  try {
+    const movimentos = await getMovimentos()
+    const movimentosFiltrados = movimentos.filter(m => {
+      const anoMovimento = new Date(m.data).getFullYear()
+      return anoMovimento === ano
+    })
+    
+    const saldos: Record<string, number> = {}
+    movimentosFiltrados.forEach(m => {
+      if (!saldos[m.clienteId]) saldos[m.clienteId] = 0
+      if (m.tipo === 'credito') {
+        saldos[m.clienteId] += m.valor
+      } else {
+        saldos[m.clienteId] -= m.valor
+      }
+    })
+    
+    return saldos
+  } catch (error) {
+    console.error('Erro ao buscar saldos por ano:', error)
+    return {}
+  }
+}
+
+export async function getMovimentosDoClientePorAno(clienteId: string, ano: number): Promise<ValeMovimento[]> {
+  try {
+    const movimentos = await getMovimentosDoCliente(clienteId)
+    return movimentos.filter(m => {
+      const anoMovimento = new Date(m.data).getFullYear()
+      return anoMovimento === ano
+    })
+  } catch (error) {
+    console.error('Erro ao buscar movimentos do cliente por ano:', error)
+    return []
+  }
+}

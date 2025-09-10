@@ -42,7 +42,7 @@ export async function loadOutrosNegocios(): Promise<OutroNegocio[]> {
 
 export async function saveOutrosNegocios(items: OutroNegocio[]): Promise<void> {
   // Esta função não é mais necessária pois salvamos individualmente via API
-  console.log("saveOutrosNegocios deprecated - use addOutroNegocio/updateOutroNegocio")
+  // Função deprecated - usar addOutroNegocio/updateOutroNegocio
 }
 
 export async function addOutroNegocio(item: OutroNegocio): Promise<OutroNegocio[]> {

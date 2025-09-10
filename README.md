@@ -27,7 +27,7 @@ node install.js
 
 1. ✅ Verifica e instala Node.js (se necessário)
 2. ✅ Verifica e instala Docker (se necessário)
-3. ✅ Cria diretório de dados externo (`./data/`)
+3. ✅ Cria diretório de dados externo (`../banco-de-dados/`)
 4. ✅ Configura arquivo de ambiente (`.env.local`)
 5. ✅ Instala todas as dependências npm
 6. ✅ Constrói o projeto
@@ -96,7 +96,7 @@ npm run diagnose
 
 2. **Verifique permissões:**
    - Execute como administrador (Windows)
-   - Verifique permissões da pasta `./data/`
+   - Verifique permissões da pasta `../banco-de-dados/`
 
 3. **Configure caminho personalizado:**
    ```bash
@@ -113,7 +113,7 @@ npm run diagnose
    ```yaml
    # docker-compose.yml já configurado
    volumes:
-     - ./data:/data  # Dados ficam em ./data/ no host
+     - ../banco-de-dados:/data  # Dados ficam em ../banco-de-dados/ no host
    ```
 Acesse: http://localhost:3145
 
@@ -127,7 +127,7 @@ npm run docker:logs     # Ver logs
 
 ## 📁 Estrutura do Banco de Dados
 
-- **Localização**: `./data/erp.sqlite`
+- **Localização**: `../banco-de-dados/erp.sqlite`
 - **Tipo**: SQLite
 - **Status**: **Externo ao Docker** (dados persistem mesmo removendo containers)
 
@@ -137,7 +137,7 @@ Todas as configurações estão no arquivo `.env.local` (criado automaticamente)
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:3145
-DB_PATH=./data/erp.sqlite
+DB_PATH=../banco-de-dados/erp.sqlite
 NODE_ENV=development
 ```
 
@@ -146,7 +146,7 @@ NODE_ENV=development
 Para testar uma instalação completamente limpa:
 
 1. Delete a pasta `node_modules`
-2. Delete a pasta `data`
+2. Delete a pasta `../banco-de-dados`
 3. Delete o arquivo `.env.local`
 4. Execute: `npm run setup`
 

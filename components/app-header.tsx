@@ -9,7 +9,9 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useEffect, useMemo, useState } from "react"
 import { getConfig, CONFIG_CHANGED_EVENT } from "@/lib/config"
-import { ensureDefaultEmpresa, getCurrentEmpresa, EMPRESA_CHANGED_EVENT } from "@/lib/empresas-client"
+import { useAuth } from "@/contexts/AuthContext"
+import { LogOut, User } from "lucide-react"
+
 import { ERP_CHANGED_EVENT } from "@/lib/data-store"
 
 
@@ -18,6 +20,7 @@ const routes = [
   { href: "/vendas", label: "Vendas" },
   { href: "/acertos", label: "Acertos" },
   { href: "/clientes", label: "Clientes" },
+  { href: "/produtos", label: "Produtos" },
   { href: "/vales", label: "Vale" },
   { href: "/relatorios", label: "Relatórios" },
   { href: "/outros-negocios", label: "Outros negócios" },
@@ -28,9 +31,10 @@ const routes = [
 export function AppHeader({ className = "" }: { className?: string }) {
   const pathname = usePathname()
   const router = useRouter()
+  const { usuario, logout } = useAuth()
   const [brand, setBrand] = useState<string>("LP IND")
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined)
-  const [empresaNome, setEmpresaNome] = useState<string>("")
+
 
   const placeholderLogo = useMemo(() => "/placeholder.svg?height=28&width=28", [])
   
@@ -52,14 +56,11 @@ export function AppHeader({ className = "" }: { className?: string }) {
   useEffect(() => {
     const initData = async () => {
       try {
-        await ensureDefaultEmpresa()
         const cfg = getConfig()
-        const curEmp = getCurrentEmpresa()
         
-        // Priorizar dados da empresa atual
-        setBrand(curEmp?.nomeDoSistema || cfg?.nome || "LP IND")
-        setLogoUrl(curEmp?.logoUrl || cfg?.logoUrl || undefined)
-        setEmpresaNome(curEmp?.nome || "")
+        // Usar dados da configuração geral
+        setBrand(cfg?.nome || "LP IND")
+        setLogoUrl(cfg?.logoUrl || undefined)
       } catch (error) {
         console.error("Erro ao carregar dados:", error)
       }
@@ -73,42 +74,12 @@ export function AppHeader({ className = "" }: { className?: string }) {
       setLogoUrl(cfg?.logoUrl || undefined)
     }
 
-    const onEmpresaChanged = () => {
-      const curEmp = getCurrentEmpresa()
-      setEmpresaNome(curEmp?.nome || "")
-      // Usar dados da empresa atual para nome do sistema e logo
-      if (curEmp?.nomeDoSistema) {
-        setBrand(curEmp.nomeDoSistema)
-      }
-      if (curEmp?.logoUrl) {
-        setLogoUrl(curEmp.logoUrl)
-      }
-    }
 
-    const onErpChanged = async () => {
-      try {
-        await ensureDefaultEmpresa()
-        const curEmp = getCurrentEmpresa()
-        if (curEmp?.nomeDoSistema) {
-          setBrand(curEmp.nomeDoSistema)
-        }
-        if (curEmp?.logoUrl) {
-          setLogoUrl(curEmp.logoUrl)
-        }
-        setEmpresaNome(curEmp?.nome || "")
-      } catch (error) {
-        console.error("Erro ao recarregar dados da empresa:", error)
-      }
-    }
 
     window.addEventListener(CONFIG_CHANGED_EVENT, onConfigChanged as EventListener)
-    window.addEventListener(EMPRESA_CHANGED_EVENT, onEmpresaChanged as EventListener)
-    window.addEventListener(ERP_CHANGED_EVENT, onErpChanged as EventListener)
     
     return () => {
       window.removeEventListener(CONFIG_CHANGED_EVENT, onConfigChanged as EventListener)
-      window.removeEventListener(EMPRESA_CHANGED_EVENT, onEmpresaChanged as EventListener)
-      window.removeEventListener(ERP_CHANGED_EVENT, onErpChanged as EventListener)
     }
   }, [pathname])
 
@@ -119,7 +90,7 @@ export function AppHeader({ className = "" }: { className?: string }) {
         className,
       )}
     >
-      <div className="mx-auto flex h-16 min-h-16 max-w-7xl items-center gap-3 px-4">
+      <div className="mx-auto flex h-16 min-h-16 items-center gap-2 px-4">
         {/* Marca */}
         <Link href="/" className="flex shrink-0 items-center gap-2" title={brand}>
           {logoUrl ? (
@@ -143,7 +114,7 @@ export function AppHeader({ className = "" }: { className?: string }) {
         <nav
           aria-label="Principal"
           className="hidden md:flex flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap
-                     [-ms-overflow-style:none] [scrollbar-width:none]"
+                     [-ms-overflow-style:none] [scrollbar-width:none] min-w-0"
           style={{ scrollbarWidth: "none" } as React.CSSProperties}
         >
           {routes.map((r) => {
@@ -161,20 +132,29 @@ export function AppHeader({ className = "" }: { className?: string }) {
           })}
         </nav>
 
-        {/* Usuário e empresa */}
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <div className="hidden md:inline-flex">
+        {/* Menu */}
+        <div className="ml-auto flex shrink-0 items-center gap-2 min-w-0">
+          {/* Informações do usuário */}
+          {usuario && (
+            <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
+              <User className="h-4 w-4" />
+              <span className="truncate max-w-32">{usuario.nome}</span>
+            </div>
+          )}
+
+          {/* Botão de logout */}
+          {usuario && (
             <Button
-              variant="outline"
-              className="bg-transparent max-w-[260px] overflow-hidden text-ellipsis whitespace-nowrap"
-              title={empresaNome ? `Empresa: ${empresaNome}` : "Empresa"}
-              disabled
+              variant="ghost"
+              size="sm"
+              onClick={logout}
+              className="text-sm"
+              title="Sair"
             >
-              {empresaNome ? `Empresa: ${empresaNome}` : "Empresa"}
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">Sair</span>
             </Button>
-          </div>
-
-
+          )}
 
           {/* Navegação compacta no mobile */}
           <div className="md:hidden">
@@ -204,11 +184,7 @@ export function AppHeader({ className = "" }: { className?: string }) {
               </Link>
             )
           })}
-          <div className="shrink-0">
-            <Button size="sm" variant="outline" className="text-xs bg-transparent" disabled>
-              {empresaNome ? "Empresa" : "Empresa"}
-            </Button>
-          </div>
+
         </div>
       </div>
     </header>

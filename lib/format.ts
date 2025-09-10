@@ -9,19 +9,14 @@ export const fmtDate = (d: string | Date | null | undefined) => {
 }
 
 // Converte string com vírgula para número
-export const parseDecimal = (value: string): number => {
-  console.log('parseDecimal called with value:', value)
-  if (!value) {
-    console.log('parseDecimal returning 0 for empty value')
+export function parseDecimal(value: string | number | null | undefined): number {
+  if (!value && value !== 0) {
     return 0
   }
-  // Remove espaços e substitui vírgula por ponto
-  const normalized = value.trim().replace(',', '.')
-  console.log('parseDecimal normalized:', normalized)
+  
+  const normalized = String(value).replace(/[^\d,-]/g, '').replace(',', '.')
   const parsed = parseFloat(normalized)
-  console.log('parseDecimal parsed:', parsed, 'isNaN:', isNaN(parsed))
   const result = isNaN(parsed) ? 0 : parsed
-  console.log('parseDecimal returning:', result)
   return result
 }
 

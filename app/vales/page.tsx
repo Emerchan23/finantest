@@ -19,12 +19,15 @@ import {
   abaterCredito,
   getSaldoCliente,
   getSaldosPorCliente,
+  getSaldosPorClientePorAno,
   getMovimentosDoCliente,
+  getMovimentosDoClientePorAno,
   deleteMovimento,
   deleteMovimentosDoCliente,
   type ValeMovimento,
 } from "@/lib/vales"
 import { makeValeDocumentHTML, makeExtratoValeHTML, downloadPDF } from "@/lib/print"
+import { getConfig } from "@/lib/config"
 
 function brl(n: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n || 0)
@@ -43,6 +46,7 @@ export default function ValesPage() {
   const [mostrarTodos, setMostrarTodos] = useState(false)
   const [extratoCliente, setExtratoCliente] = useState<string | null>(null)
   const [refreshTick, setRefreshTick] = useState(0)
+  const [anoSelecionado, setAnoSelecionado] = useState(new Date().getFullYear())
 
   useEffect(() => {
     async function reload() {
@@ -78,6 +82,7 @@ export default function ValesPage() {
   useEffect(() => {
     async function loadSaldos() {
       try {
+        // Usar getSaldosPorCliente() para mostrar todos os saldos sem filtro de ano
         const saldosPorCliente = await getSaldosPorCliente()
         const clientesComSaldo = clientes
           .map((c) => ({ ...c, saldo: saldosPorCliente[c.id] ?? 0 }))
@@ -169,6 +174,7 @@ export default function ValesPage() {
     try {
       const movimentos = await getMovimentosDoCliente(cliente.id)
       const saldo = await getSaldoCliente(cliente.id)
+      const config = getConfig()
       
       const html = makeValeDocumentHTML({
         cliente: {
@@ -177,7 +183,8 @@ export default function ValesPage() {
           cpf: cliente.documento
         },
         saldo,
-        movimentos
+        movimentos,
+        config
       })
       
       await downloadPDF(html, `Vale_${cliente.nome}`)
@@ -193,6 +200,7 @@ export default function ValesPage() {
   async function baixarExtratoDespesas(cliente: Cliente) {
     try {
       const movimentos = await getMovimentosDoCliente(cliente.id)
+      const config = getConfig()
       
       const html = makeExtratoValeHTML({
         cliente: {
@@ -200,7 +208,8 @@ export default function ValesPage() {
           cnpj: cliente.documento,
           cpf: cliente.documento
         },
-        movimentos
+        movimentos,
+        config
       })
       
       await downloadPDF(html, `Extrato_Despesas_${cliente.nome}`)
@@ -316,8 +325,8 @@ export default function ValesPage() {
                 {/* Histórico de movimentações do cliente selecionado */}
                 {clienteDebito && (
                   <div className="mt-6">
-                    <h3 className="text-lg font-semibold mb-4">Histórico de movimentações</h3>
-                    <HistoricoMovimentacoes clienteId={clienteDebito} onChanged={() => setRefreshTick((t) => t + 1)} />
+                    <h3 className="text-lg font-semibold mb-4">Histórico de movimentações ({anoSelecionado})</h3>
+                    <HistoricoMovimentacoes clienteId={clienteDebito} onChanged={() => setRefreshTick((t) => t + 1)} ano={anoSelecionado} />
                   </div>
                 )}
               </TabsContent>
@@ -328,10 +337,30 @@ export default function ValesPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Saldos por cliente</CardTitle>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={mostrarTodos} onChange={(e) => setMostrarTodos(e.target.checked)} />
-              Mostrar todos (inclusive saldo R$ 0,00)
-            </label>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="ano-select" className="text-sm">Ano:</Label>
+                <Select value={anoSelecionado.toString()} onValueChange={(value) => setAnoSelecionado(Number(value))}>
+                  <SelectTrigger className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 10 }, (_, i) => {
+                      const ano = new Date().getFullYear() - i
+                      return (
+                        <SelectItem key={ano} value={ano.toString()}>
+                          {ano}
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={mostrarTodos} onChange={(e) => setMostrarTodos(e.target.checked)} />
+                Mostrar todos (inclusive saldo R$ 0,00)
+              </label>
+            </div>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <Table>
@@ -361,6 +390,7 @@ export default function ValesPage() {
                             clienteId={c.id}
                             clienteNome={c.nome}
                             onChanged={() => setRefreshTick((t) => t + 1)}
+                            ano={anoSelecionado}
                           />
                         </Dialog>
                         <Button
@@ -397,7 +427,7 @@ export default function ValesPage() {
                 {saldos.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center text-muted-foreground">
-                      Nenhum registro.
+                      Nenhum registro encontrado para {anoSelecionado}.
                     </TableCell>
                   </TableRow>
                 )}
@@ -413,13 +443,16 @@ export default function ValesPage() {
 function HistoricoMovimentacoes({
   clienteId,
   onChanged,
-}: { clienteId: string; onChanged: () => void }) {
+  ano,
+}: { clienteId: string; onChanged: () => void; ano?: number }) {
   const [movs, setMovs] = useState<ValeMovimento[]>([])
   
   useEffect(() => {
     async function loadMovimentos() {
       try {
-        const movimentos = await getMovimentosDoCliente(clienteId)
+        const movimentos = ano 
+          ? await getMovimentosDoClientePorAno(clienteId, ano)
+          : await getMovimentosDoCliente(clienteId)
         setMovs(movimentos)
       } catch (error) {
         console.error('Erro ao carregar movimentos:', error)
@@ -429,7 +462,7 @@ function HistoricoMovimentacoes({
     if (clienteId) {
       loadMovimentos()
     }
-  }, [clienteId])
+  }, [clienteId, ano])
 
   async function handleDelete(id: string) {
     try {
@@ -494,13 +527,14 @@ function ExtratoDialog({
   clienteId,
   clienteNome,
   onChanged,
-}: { clienteId: string; clienteNome: string; onChanged: () => void }) {
+  ano,
+}: { clienteId: string; clienteNome: string; onChanged: () => void; ano: number }) {
   return (
     <DialogContent className="max-w-2xl">
       <DialogHeader>
-        <DialogTitle>Extrato de vales — {clienteNome}</DialogTitle>
+        <DialogTitle>Extrato de vales — {clienteNome} ({ano})</DialogTitle>
       </DialogHeader>
-      <HistoricoMovimentacoes clienteId={clienteId} onChanged={onChanged} />
+      <HistoricoMovimentacoes clienteId={clienteId} onChanged={onChanged} ano={ano} />
     </DialogContent>
   )
 }

@@ -4,45 +4,69 @@ import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(request: NextRequest) {
   try {
-    // Create table if it doesn't exist
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS orcamentos (
-        id TEXT PRIMARY KEY,
-        numero TEXT NOT NULL UNIQUE,
-        cliente_id TEXT NOT NULL,
-        data_orcamento TEXT NOT NULL,
-        data_validade TEXT,
-        valor_total REAL NOT NULL DEFAULT 0,
-        descricao TEXT,
-        status TEXT DEFAULT 'pendente',
-        observacoes TEXT,
-        condicoes_pagamento TEXT,
-        prazo_entrega TEXT,
-        vendedor_id TEXT,
-        desconto REAL DEFAULT 0,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+    // Verificar se o banco está disponível
+    if (!db || !db.prepare) {
+      console.error('Database connection not available');
+      return NextResponse.json(
+        { error: 'Database connection error' },
+        { status: 500 }
+      );
+    }
+
+    // Create table if it doesn't exist (apenas em runtime)
+    if (process.env.NEXT_PHASE !== 'phase-production-build' && db.exec) {
+      try {
+        db.exec(`
+        CREATE TABLE IF NOT EXISTS orcamentos (
+          id TEXT PRIMARY KEY,
+          numero TEXT NOT NULL UNIQUE,
+          cliente_id TEXT NOT NULL,
+          data_orcamento TEXT NOT NULL,
+          data_validade TEXT,
+          valor_total REAL NOT NULL DEFAULT 0,
+          descricao TEXT,
+          status TEXT DEFAULT 'pendente',
+          observacoes TEXT,
+          condicoes_pagamento TEXT,
+          prazo_entrega TEXT,
+          vendedor_id TEXT,
+          desconto REAL DEFAULT 0,
+          modalidade TEXT,
+          numero_pregao TEXT,
+          numero_dispensa TEXT,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      } catch (tableError) {
+        console.error('Error creating orcamentos table:', tableError);
+      }
+    }
 
     // Create orcamento_itens table for line items
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS orcamento_itens (
-        id TEXT PRIMARY KEY,
-        orcamento_id TEXT NOT NULL,
-        produto_id TEXT,
-        descricao TEXT NOT NULL,
-        marca TEXT,
-        quantidade REAL NOT NULL,
-        valor_unitario REAL NOT NULL,
-        valor_total REAL NOT NULL,
-        observacoes TEXT,
-        link_ref TEXT,
-        custo_ref REAL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (orcamento_id) REFERENCES orcamentos (id)
-      )
-    `);
+    if (process.env.NEXT_PHASE !== 'phase-production-build' && db.exec) {
+      try {
+        db.exec(`
+        CREATE TABLE IF NOT EXISTS orcamento_itens (
+          id TEXT PRIMARY KEY,
+          orcamento_id TEXT NOT NULL,
+          produto_id TEXT,
+          descricao TEXT NOT NULL,
+          marca TEXT,
+          quantidade REAL NOT NULL,
+          valor_unitario REAL NOT NULL,
+          valor_total REAL NOT NULL,
+          observacoes TEXT,
+          link_ref TEXT,
+          custo_ref REAL,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (orcamento_id) REFERENCES orcamentos (id)
+        )
+      `);
+      } catch (tableError) {
+        console.error('Error creating orcamento_itens table:', tableError);
+      }
+    }
 
     const searchParams = request.nextUrl.searchParams;
     const clienteId = searchParams.get('cliente_id');
@@ -93,7 +117,19 @@ export async function GET(request: NextRequest) {
     
     query += ' ORDER BY data_orcamento DESC';
     
-    const orcamentos = db.prepare(query).all(...params) as any[];
+    let orcamentos: any[];
+    try {
+      const stmt = db.prepare(query);
+      orcamentos = stmt.all(...params) as any[];
+    } catch (queryError) {
+      console.error('Error executing orcamentos query:', queryError);
+      console.error('Query:', query);
+      console.error('Params:', params);
+      return NextResponse.json(
+        { error: 'Database query error' },
+        { status: 500 }
+      );
+    }
 
     // Transform the data to match the expected frontend format
     const transformedOrcamentos = orcamentos.map(orcamento => {
@@ -116,6 +152,9 @@ export async function GET(request: NextRequest) {
         prazo_entrega: orcamento.prazo_entrega,
         vendedor_id: orcamento.vendedor_id,
         desconto: orcamento.desconto,
+        modalidade: orcamento.modalidade,
+        numero_pregao: orcamento.numero_pregao,
+        numero_dispensa: orcamento.numero_dispensa,
         createdAt: orcamento.created_at,
         updatedAt: orcamento.updated_at,
         itens: [] // Will be populated below if requested
@@ -127,22 +166,27 @@ export async function GET(request: NextRequest) {
     // Include items if requested
     if (incluirItens) {
       for (const orcamento of transformedOrcamentos) {
-        const itens = db.prepare(
-          'SELECT * FROM orcamento_itens WHERE orcamento_id = ? ORDER BY created_at'
-        ).all(orcamento.id);
-        
-        // Transform items to match expected format
-        (orcamento as any).itens = itens.map((item: any) => ({
-          id: item.id,
-          produto_id: item.produto_id,
-          descricao: item.descricao,
-          marca: item.marca || '',
-          quantidade: item.quantidade,
-          valor_unitario: item.valor_unitario,
-          link_ref: item.link_ref,
-          custo_ref: item.custo_ref,
-          desconto: 0 // Default value, can be added to schema later
-        }));
+        try {
+          const itens = db.prepare(
+            'SELECT * FROM orcamento_itens WHERE orcamento_id = ? ORDER BY created_at'
+          ).all(orcamento.id);
+          
+          // Transform items to match expected format
+          (orcamento as any).itens = itens.map((item: any) => ({
+            id: item.id,
+            produto_id: item.produto_id,
+            descricao: item.descricao,
+            marca: item.marca || '',
+            quantidade: item.quantidade,
+            valor_unitario: item.valor_unitario,
+            link_ref: item.link_ref,
+            custo_ref: item.custo_ref,
+            desconto: 0 // Default value, can be added to schema later
+          }));
+        } catch (itemError) {
+          console.error('Error fetching items for orcamento:', orcamento.id, itemError);
+          (orcamento as any).itens = [];
+        }
       }
     }
 
@@ -171,16 +215,36 @@ export async function POST(request: NextRequest) {
       prazo_entrega,
       vendedor_id,
       desconto,
+      modalidade,
+      numero_pregao,
+      numero_dispensa,
       itens
     } = body;
     
     // Validation
-    if (!numero || !cliente_id || !data_orcamento) {
+    if (!cliente_id || !itens || itens.length === 0) {
       return NextResponse.json(
-        { error: 'Campos obrigatórios: numero, cliente_id, data_orcamento' },
+        { error: 'Cliente e itens são obrigatórios' },
         { status: 400 }
       );
     }
+
+    // Get system configuration for validade_orcamento
+    let validadeDias = 30; // default
+    try {
+      const config = db.prepare('SELECT validade_orcamento FROM system_config LIMIT 1').get();
+      if (config && config.validade_orcamento) {
+        validadeDias = config.validade_orcamento;
+      }
+    } catch (configError) {
+      console.log('Using default validade_orcamento:', validadeDias);
+    }
+
+    // Calculate data_validade based on configuration
+    const dataOrcamento = data_orcamento ? new Date(data_orcamento) : new Date();
+    const dataValidadeCalculated = new Date(dataOrcamento);
+    dataValidadeCalculated.setDate(dataValidadeCalculated.getDate() + validadeDias);
+    const finalDataValidade = data_validade || dataValidadeCalculated.toISOString().split('T')[0];
     
     const id = uuidv4();
     
@@ -229,29 +293,73 @@ export async function POST(request: NextRequest) {
       finalNumero = `${numeroFormatado}/${currentYear}`;
     }
     
-    // Insert orcamento
-    db.prepare(
-      `INSERT INTO orcamentos (
-        id, numero, cliente_id, data_orcamento, data_validade, valor_total,
-        descricao, observacoes, condicoes_pagamento, prazo_entrega, 
-        vendedor_id, desconto
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(id, finalNumero, cliente_id, data_orcamento, data_validade, valorTotal, 
-       descricao, observacoes, condicoes_pagamento, prazo_entrega, vendedor_id, desconto);
+    // Insert the orcamento
+    try {
+      const insertOrcamento = db.prepare(`
+        INSERT INTO orcamentos (
+          id, numero, cliente_id, data_orcamento, data_validade, valor_total,
+          descricao, status, observacoes, condicoes_pagamento, prazo_entrega,
+          vendedor_id, desconto, modalidade, numero_pregao, numero_dispensa
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      insertOrcamento.run(
+        id,
+        finalNumero,
+        cliente_id,
+        data_orcamento,
+        finalDataValidade,
+        valorTotal,
+        descricao,
+        'pendente',
+        observacoes,
+        condicoes_pagamento,
+        prazo_entrega,
+        vendedor_id,
+        desconto,
+        modalidade,
+        numero_pregao,
+        numero_dispensa
+      );
+    } catch (insertError) {
+      console.error('Error inserting orcamento:', insertError);
+      return NextResponse.json(
+        { error: 'Failed to create orcamento' },
+        { status: 500 }
+      );
+    }
     
     // Insert items if provided
     if (itens && Array.isArray(itens)) {
-      for (const item of itens) {
-        const itemId = uuidv4();
-        const valorTotalItem = item.quantidade * item.valor_unitario;
-        
-        db.prepare(
-          `INSERT INTO orcamento_itens (
+      try {
+        const insertItem = db.prepare(`
+          INSERT INTO orcamento_itens (
             id, orcamento_id, produto_id, descricao, marca, quantidade,
             valor_unitario, valor_total, observacoes, link_ref, custo_ref
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(itemId, id, item.produto_id, item.descricao, item.marca, item.quantidade,
-           item.valor_unitario, valorTotalItem, item.observacoes, item.link_ref, item.custo_ref);
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        for (const item of itens) {
+          const itemId = uuidv4();
+          const valorTotalItem = item.quantidade * item.valor_unitario;
+          
+          insertItem.run(
+            itemId,
+            id,
+            item.produto_id || null,
+            item.descricao,
+            item.marca || '',
+            item.quantidade,
+            item.valor_unitario,
+            valorTotalItem,
+            item.observacoes || '',
+            item.link_ref || '',
+            item.custo_ref || 0
+          );
+        }
+      } catch (itemsError) {
+        console.error('Error inserting orcamento items:', itemsError);
+        // Continue execution - orcamento was created successfully
       }
     }
     
@@ -281,17 +389,51 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Get system configuration for validade_orcamento
+    let validadeDias = 30; // default
+    try {
+      const config = db.prepare('SELECT validade_orcamento FROM system_config LIMIT 1').get();
+      if (config && config.validade_orcamento) {
+        validadeDias = config.validade_orcamento;
+      }
+    } catch (configError) {
+      console.log('Using default validade_orcamento:', validadeDias);
+    }
+
+    // Calculate data_validade based on configuration if not provided
+    let dataValidade = updateData.data_validade;
+    if (!dataValidade && updateData.data_orcamento) {
+      const dataOrcamento = new Date(updateData.data_orcamento);
+      const dataValidadeCalculada = new Date(dataOrcamento);
+      dataValidadeCalculada.setDate(dataValidadeCalculada.getDate() + validadeDias);
+      dataValidade = dataValidadeCalculada.toISOString().split('T')[0];
+      updateData.data_validade = dataValidade;
+    }
     
     // Update orcamento
-    const fields = Object.keys(updateData).map(key => `${key} = ?`).join(', ');
-    const values = Object.values(updateData);
-    values.push(id);
-    
-    if (fields) {
-      db.prepare(
-        `UPDATE orcamentos SET ${fields}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-      ).run(...values);
-    }
+    const updateOrcamento = db.prepare(`
+      UPDATE orcamentos SET
+        cliente_id = ?,
+        data_orcamento = ?,
+        data_validade = ?,
+        observacoes = ?,
+        valor_total = ?,
+        modalidade = ?,
+        numero_pregao = ?,
+        numero_dispensa = ?
+      WHERE id = ?`
+    ).run(
+      updateData.cliente_id,
+      updateData.data_orcamento,
+      dataValidade,
+      updateData.observacoes || null,
+      updateData.valor_total,
+      updateData.modalidade || 'normal',
+      updateData.numero_pregao || null,
+      updateData.numero_dispensa || null,
+      id
+    )
     
     // Update items if provided
     if (itens && Array.isArray(itens)) {

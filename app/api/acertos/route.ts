@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '../../../lib/db'
 import { v4 as uuidv4 } from 'uuid'
 
-// Criar tabela acertos se não existir
-db.exec(`
+// Criar tabela acertos se não existir (apenas em runtime)
+if (process.env.NEXT_PHASE !== 'phase-production-build' && db.exec) {
+  db.exec(`
   CREATE TABLE IF NOT EXISTS acertos (
     id TEXT PRIMARY KEY,
     data TEXT NOT NULL,
@@ -22,16 +23,31 @@ db.exec(`
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
+}
 
 export async function GET(request: NextRequest) {
   try {
     const acertos = db.prepare(`
       SELECT * FROM acertos 
       ORDER BY data DESC
-    `).all()
+    `).all() as {
+      id: string;
+      linhaIds: string | null;
+      distribuicoes: string | null;
+      despesas: string | null;
+      ultimoRecebimentoBanco: string | null;
+      [key: string]: unknown;
+    }[]
     
     // Parse JSON fields
-    const parsedAcertos = acertos.map((acerto: any) => ({
+    const parsedAcertos = acertos.map((acerto: {
+      id: string;
+      linhaIds: string | null;
+      distribuicoes: string | null;
+      despesas: string | null;
+      ultimoRecebimentoBanco: string | null;
+      [key: string]: unknown;
+    }) => ({
       ...acerto,
       linhaIds: acerto.linhaIds ? JSON.parse(acerto.linhaIds) : [],
       distribuicoes: acerto.distribuicoes ? JSON.parse(acerto.distribuicoes) : [],

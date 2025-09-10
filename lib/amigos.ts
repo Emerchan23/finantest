@@ -31,7 +31,7 @@ function readAll(): AmigoLancamento[] {
 
 function writeAll(list: AmigoLancamento[]) {
   amigosData = list
-  console.log("Dados de amigos devem ser salvos no backend:", list)
+
 }
 
 export function ensureAmigosInit() {

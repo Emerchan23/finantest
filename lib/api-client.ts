@@ -1,6 +1,18 @@
 "use client"
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:3145").replace(/\/$/, "")
+// Detectar automaticamente o host correto baseado na URL atual
+const getApiUrl = () => {
+  if (typeof window !== 'undefined') {
+    // No cliente, usar o mesmo host da página atual
+    const protocol = window.location.protocol
+    const host = window.location.host
+    return `${protocol}//${host}`
+  }
+  // No servidor, usar a variável de ambiente ou localhost como fallback
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:3145"
+}
+
+const API_URL = getApiUrl().replace(/\/$/, "")
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
@@ -26,13 +38,32 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
     
     if (!res.ok) {
       const text = await res.text().catch(() => "")
-      console.error(`HTTP Error ${res.status} for ${path}:`, text)
+      
+      // Não loga erros HTTP 400 para exclusão de clientes com dependências (comportamento esperado)
+      const isClientDependencyError = res.status === 400 && 
+        path.includes('/api/clientes/') && 
+        text.includes('registros associados')
+      
+      if (!isClientDependencyError) {
+        console.error(`HTTP Error ${res.status} for ${path}:`, text)
+      }
+      
       throw new Error(`HTTP ${res.status} ${res.statusText} - ${text}`)
     }
     return (await res.json()) as T
   } catch (error) {
     clearTimeout(timeoutId)
-    console.error(`Fetch error for ${path}:`, error)
+    
+    // Não loga erros de fetch para exclusão de clientes com dependências (comportamento esperado)
+    const isClientDependencyError = path.includes('/api/clientes/') && 
+      error instanceof Error && 
+      error.message.includes('400') && 
+      error.message.includes('registros associados')
+    
+    if (!isClientDependencyError) {
+      console.error(`Fetch error for ${path}:`, error)
+    }
+    
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error('Request timeout - verifique a conexão com o servidor')
     }
@@ -190,6 +221,7 @@ export type Produto = {
   estoque?: number | null
   linkRef?: string | null
   custoRef?: number | null
+  categoria?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -255,6 +287,9 @@ export type Orcamento = {
   itens: OrcamentoItem[]
   observacoes?: string | null
   status?: string
+  modalidade?: string | null
+  numero_pregao?: string | null
+  numero_dispensa?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -277,21 +312,21 @@ export async function getDashboardTotals(): Promise<DashboardTotals> {
   }
 }
 
-export async function getDashboardSeries(): Promise<{ name: string; vendas: number; lucros: number; impostos: number; despesas: number; lucroLiquido: number }[]> {
+export async function getDashboardSeries(year?: number, semester?: string): Promise<{ name: string; vendas: number; lucros: number; impostos: number; despesas: number; lucroLiquido: number }[]> {
   try {
-    return await api.dashboard.series()
+    return await api.dashboard.series(year, semester)
   } catch (error) {
     console.error("Erro ao obter séries do dashboard:", error)
     return []
   }
 }
 
-export async function getDashboardSummary(): Promise<{ totalClientes: number; totalPedidos: number; pedidosPendentes: number }> {
+export async function getDashboardSummary(): Promise<{ totalClientes: number; totalProdutos: number; totalPedidos: number; pedidosPendentes: number; orcamentosAprovados: number; orcamentosPendentes: number }> {
   try {
     return await api.dashboard.summary()
   } catch (error) {
     console.error("Erro ao obter resumo do dashboard:", error)
-    return { totalClientes: 0, totalPedidos: 0, pedidosPendentes: 0 }
+    return { totalClientes: 0, totalProdutos: 0, totalPedidos: 0, pedidosPendentes: 0, orcamentosAprovados: 0, orcamentosPendentes: 0 }
   }
 }
 
@@ -371,27 +406,17 @@ export const api = {
   },
   dashboard: {
     totals: () => http<DashboardTotals>("/api/dashboard/totals"),
-    series: () => http<{ name: string; vendas: number; lucros: number; impostos: number; despesas: number; lucroLiquido: number }[]>("/api/dashboard/series"),
-    summary: () => http<{ totalClientes: number; totalPedidos: number; pedidosPendentes: number }>("/api/dashboard/summary"),
+    series: (year?: number, semester?: string) => {
+      const params = new URLSearchParams()
+      if (year) params.append('year', year.toString())
+      if (semester) params.append('semester', semester)
+      const queryString = params.toString()
+      return http<{ name: string; vendas: number; lucros: number; impostos: number; despesas: number; lucroLiquido: number }[]>(`/api/dashboard/series${queryString ? '?' + queryString : ''}`)
+    },
+    summary: () => http<{ totalClientes: number; totalProdutos: number; totalPedidos: number; pedidosPendentes: number; orcamentosAprovados: number; orcamentosPendentes: number }>("/api/dashboard/summary"),
     alerts: () => http<{ id: string; type: string; title: string; message: string; timestamp: string }[]>("/api/dashboard/alerts"),
   },
-  empresas: {
-    list: () => http<{ id: string; nome: string }[]>("/api/empresas"),
-    create: (data: { nome: string }) =>
-      http<{ id: string }>("/api/empresas", { method: "POST", body: JSON.stringify(data) }),
-    update: (id: string, data: { nome: string }) =>
-      http<{ ok: true }>(`/api/empresas/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-    config: {
-      get: (empresaId: string) => http<any | null>(`/api/empresa-config/${empresaId}`),
-      set: (empresaId: string, cfg: any) =>
-        http<{ ok: true }>(`/api/empresa-config/${empresaId}`, { method: "PUT", body: JSON.stringify(cfg) }),
-    },
-    prefs: {
-      get: () => http<any>("/api/user-prefs"),
-      set: (data: any) => http<{ ok: true }>("/api/user-prefs", { method: "PUT", body: JSON.stringify(data) }),
-    },
-    delete: (id: string) => http<{ ok: true }>(`/api/empresas/${id}`, { method: "DELETE" }),
-  },
+
   linhas: {
     list: () => http<LinhaVenda[]>("/api/linhas"),
     create: (data: Partial<LinhaVenda>) =>

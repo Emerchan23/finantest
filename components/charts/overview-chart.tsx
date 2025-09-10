@@ -26,22 +26,18 @@ export function OverviewChart({
 }) {
   // Garantir que data seja sempre um array válido
   const safeData = React.useMemo(() => {
-    console.log('OverviewChart received data:', data, 'type:', typeof data, 'isArray:', Array.isArray(data))
-    
-    // Se data for undefined, null ou não for um array, retornar array vazio
-    if (!data || !Array.isArray(data)) {
-      console.log('Data is not a valid array, returning empty array')
+    if (!Array.isArray(data)) {
       return []
     }
-    
-    // Validar cada item do array
-    const validData = data.filter(item => 
-      item && 
-      typeof item === 'object' && 
-      typeof item.name === 'string'
-    )
-    
-    console.log('Filtered valid data:', validData)
+
+    const validData = data.filter(item => {
+      const isValid = item && 
+        typeof item.name === 'string' && 
+        (typeof item.vendas === 'number' || typeof item.lucros === 'number' || 
+         typeof item.impostos === 'number' || typeof item.despesas === 'number' || 
+         typeof item.lucroLiquido === 'number')
+      return isValid
+    })
     return validData
   }, [data])
   

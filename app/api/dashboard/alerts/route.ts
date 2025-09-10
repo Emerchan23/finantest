@@ -25,6 +25,7 @@ function getCurrentCompanyId(): string | null {
 export async function GET() {
   try {
     const companyId = getCurrentCompanyId()
+    console.log('CompanyId:', companyId)
     if (!companyId) {
       return NextResponse.json([])
     }
@@ -40,6 +41,8 @@ export async function GET() {
       WHERE (companyId = ? OR companyId IS NULL) 
         AND paymentStatus = 'PENDENTE'
     `).get(companyId) as { count: number; valor: number }
+    
+    console.log('Pagamentos pendentes:', pagamentosPendentes)
     
     if (pagamentosPendentes.count > 0) {
       alerts.push({

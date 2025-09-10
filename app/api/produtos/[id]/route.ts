@@ -1,40 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '../../../../lib/db'
 
-// Helper function to get current company ID from user preferences
-function getCurrentCompanyId(): string | null {
-  const row = db.prepare("SELECT json FROM user_prefs WHERE userId=?").get("default") as { json: string } | undefined
-  if (!row) return null
-  
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const prefs = JSON.parse(row.json)
-    return prefs.currentEmpresaId || null
-  } catch {
-    return null
-  }
-}
-
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    const companyId = getCurrentCompanyId()
-    if (!companyId) {
-      return NextResponse.json({ error: 'Empresa não selecionada' }, { status: 400 })
-    }
-    
-    const body = await request.json()
-    const { id } = params
+    const { 
+      nome, 
+      descricao, 
+      marca, 
+      precoVenda, 
+      custo, 
+      taxaImposto, 
+      modalidadeVenda, 
+      estoque, 
+      linkRef, 
+      custoRef, 
+      categoria 
+    } = await request.json()
+    const { id } = await params
     
     db.prepare(`
       UPDATE produtos 
-      SET nome=?, preco=?, categoria=?, updated_at=?
-      WHERE id=? AND empresa_id=?
+      SET nome=?, descricao=?, marca=?, preco=?, custo=?, taxa_imposto=?, 
+          modalidade_venda=?, estoque=?, link_ref=?, custo_ref=?, categoria=?, updated_at=?
+      WHERE id=?
     `).run(
-      body.nome,
-      body.preco,
-      body.categoria || null,
+      nome,
+      descricao,
+      marca,
+      precoVenda,
+      custo || 0,
+      taxaImposto || 0,
+      modalidadeVenda,
+      estoque || 0,
+      linkRef,
+      custoRef,
+      categoria || null,
       new Date().toISOString(),
-      id,
-      companyId
+      id
     )
     
     return NextResponse.json({ ok: true })
@@ -44,16 +46,38 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const companyId = getCurrentCompanyId()
-    if (!companyId) {
-      return NextResponse.json({ error: 'Empresa não selecionada' }, { status: 400 })
+    const { id } = await params
+    
+    // Verificar se o produto tem dependências em outras tabelas
+    const orcamentoItens = db.prepare(`
+      SELECT COUNT(*) as count 
+      FROM orcamento_itens oi
+      WHERE oi.produto_id = ?
+    `).get(id) as { count: number }
+    
+    const linhasVenda = db.prepare(`
+      SELECT COUNT(*) as count 
+      FROM linhas_venda 
+      WHERE produto = (SELECT nome FROM produtos WHERE id = ?)
+    `).get(id) as { count: number }
+    
+    const vendas = db.prepare(`
+      SELECT COUNT(*) as count 
+      FROM vendas 
+      WHERE produto_id = ?
+    `).get(id) as { count: number }
+    
+    const totalDependencias = orcamentoItens.count + linhasVenda.count + vendas.count
+    
+    if (totalDependencias > 0) {
+      return NextResponse.json({ 
+        error: 'Não é possível excluir este produto pois ele possui registros associados (orçamentos, vendas ou linhas de venda).' 
+      }, { status: 400 })
     }
     
-    const { id } = params
-    
-    db.prepare("DELETE FROM produtos WHERE id = ? AND empresa_id = ?").run(id, companyId)
+    db.prepare("DELETE FROM produtos WHERE id = ?").run(id)
     
     return NextResponse.json({ ok: true })
   } catch (error) {

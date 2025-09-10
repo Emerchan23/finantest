@@ -11,12 +11,13 @@ function generateId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 import { AppHeader } from "@/components/app-header"
-import { ensureDefaultEmpresa } from "@/lib/empresas"
+// Removed empresa imports - system simplified
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
@@ -98,6 +99,7 @@ export default function AcertosPage() {
   // Modal de visualização de acerto
   const [viewAcertoOpen, setViewAcertoOpen] = useState(false)
   const [selectedAcerto, setSelectedAcerto] = useState<Acerto | null>(null)
+  const [anoSelecionado, setAnoSelecionado] = useState<number>(new Date().getFullYear())
 
   useEffect(() => {
     refreshAll()
@@ -107,12 +109,12 @@ export default function AcertosPage() {
       })
     }
     if (typeof window !== "undefined") {
-      window.addEventListener("ERP_CHANGED_EVENT" as any, onAny)
+      window.addEventListener("ERP_CHANGED_EVENT" as keyof WindowEventMap, onAny)
       window.addEventListener("storage", onAny)
     }
     return () => {
       if (typeof window !== "undefined") {
-        window.removeEventListener("ERP_CHANGED_EVENT" as any, onAny)
+        window.removeEventListener("ERP_CHANGED_EVENT" as keyof WindowEventMap, onAny)
         window.removeEventListener("storage", onAny)
       }
     }
@@ -120,8 +122,6 @@ export default function AcertosPage() {
 
   async function refreshAll() {
     try {
-      // Garantir que existe uma empresa padrão selecionada
-      await ensureDefaultEmpresa()
       const [participantesData, acertosData, despesasPendentesData, pendentesData, ultimosRecebimentosData] = await Promise.all([
         getParticipantes(),
         getAcertos(),
@@ -145,11 +145,19 @@ export default function AcertosPage() {
     }
   }
 
+  const pendentesFiltrados = useMemo(() => {
+    return pendentes.filter(linha => {
+      if (!linha.dataPedido) return false
+      const anoLinha = new Date(linha.dataPedido).getFullYear()
+      return anoLinha === anoSelecionado
+    })
+  }, [pendentes, anoSelecionado])
+
   const selectedIds = useMemo(() => Object.keys(selected).filter((k) => selected[k]), [selected])
 
   const totalLucroSel = useMemo(
-    () => pendentes.filter((l) => selectedIds.includes(l.id)).reduce((a, l) => a + (l.lucroValor || 0), 0),
-    [pendentes, selectedIds],
+    () => pendentesFiltrados.filter((l) => selectedIds.includes(l.id)).reduce((a, l) => a + (l.lucroValor || 0), 0),
+    [pendentesFiltrados, selectedIds],
   )
   const totalRateio = useMemo(
     () => despesas.filter((d) => d.tipo === "rateio").reduce((a, d) => a + (d.valor || 0), 0),
@@ -187,7 +195,7 @@ export default function AcertosPage() {
   }
   async function onSavePendente(payload: Omit<Despesa, "id">) {
     try {
-      await saveDespesaPendente(payload as any)
+      await saveDespesaPendente(payload)
       const despesasPendentesData = await getDespesasPendentes()
       setDespesasPendentes(despesasPendentesData.filter((d) => d.status === "pendente"))
       toast({ title: "Despesa salva para acerto futuro." })
@@ -514,8 +522,26 @@ export default function AcertosPage() {
         <div className="grid gap-6 md:grid-cols-2">
           {/* Pendentes de acerto (linhas) */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Vendas pendentes de acerto</CardTitle>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="ano-acertos">Ano:</Label>
+                <Select value={String(anoSelecionado)} onValueChange={(value) => setAnoSelecionado(Number(value))}>
+                  <SelectTrigger className="w-24" id="ano-acertos">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 10 }, (_, i) => {
+                      const ano = new Date().getFullYear() - 5 + i
+                      return (
+                        <SelectItem key={ano} value={String(ano)}>
+                          {ano}
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
             </CardHeader>
             <CardContent className="overflow-auto">
               <Table>
@@ -523,10 +549,10 @@ export default function AcertosPage() {
                   <TableRow>
                     <TableHead className="w-10">
                       <Checkbox
-                        checked={pendentes.length > 0 && selectedIds.length === pendentes.length}
+                        checked={pendentesFiltrados.length > 0 && selectedIds.length === pendentesFiltrados.length}
                         onCheckedChange={(v) => {
                           const on = Boolean(v)
-                          setSelected(on ? Object.fromEntries(pendentes.map((l) => [l.id, true])) : {})
+                          setSelected(on ? Object.fromEntries(pendentesFiltrados.map((l) => [l.id, true])) : {})
                         }}
                         aria-label="Selecionar todos"
                       />
@@ -538,7 +564,7 @@ export default function AcertosPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pendentes.map((l) => (
+                  {pendentesFiltrados.map((l) => (
                     <TableRow key={l.id}>
                       <TableCell>
                         <Checkbox
@@ -559,10 +585,10 @@ export default function AcertosPage() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {pendentes.length === 0 && (
+                  {pendentesFiltrados.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        Não há vendas “RECEBIDO VALOR” pendentes de acerto.
+                        Não há vendas &quot;RECEBIDO VALOR&quot; pendentes de acerto para o ano {anoSelecionado}.
                       </TableCell>
                     </TableRow>
                   )}
@@ -824,7 +850,7 @@ export default function AcertosPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <Button onClick={salvarAcerto} disabled={pendentes.length === 0}>
+                <Button onClick={salvarAcerto} disabled={pendentesFiltrados.length === 0}>
                   Salvar acerto e marcar linhas
                 </Button>
               </div>

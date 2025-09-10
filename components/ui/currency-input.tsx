@@ -7,10 +7,13 @@ export interface CurrencyInputProps
   className?: string
   value?: string | number
   onChange?: (value: string) => void
+  onValueChange?: (value: number) => void
   onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void
   showCurrency?: boolean
   suffix?: string
   placeholder?: string
+  allowDecimals?: boolean
+  decimalScale?: number
 }
 
 // Formata valor para exibição brasileira com vírgula e pontos de milhares
@@ -39,7 +42,7 @@ const parseBrazilianCurrency = (value: string): number => {
 }
 
 const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
-  ({ className, value = '', onChange, onBlur, showCurrency = false, suffix = '', placeholder, defaultValue, ...props }, ref) => {
+  ({ className, value = '', onChange, onValueChange, onBlur, showCurrency = false, suffix = '', placeholder, defaultValue, allowDecimals = true, decimalScale = 2, ...props }, ref) => {
     const [displayValue, setDisplayValue] = React.useState('')
     const [isFocused, setIsFocused] = React.useState(false)
 
@@ -72,9 +75,10 @@ const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
       const formatted = formatInputValue(inputValue)
       setDisplayValue(formatted)
       
-      // Converter para valor numérico e enviar para onChange
+      // Converter para valor numérico e enviar para onChange/onValueChange
       const numericValue = parseBrazilianCurrency(formatted)
       onChange?.(numericValue.toString())
+      onValueChange?.(numericValue)
     }
 
     const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {

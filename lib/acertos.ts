@@ -53,10 +53,7 @@ export async function deleteParticipante(id: string): Promise<void> {
 // Acertos
 export async function getAcertos(): Promise<Acerto[]> {
   try {
-    console.log('🔍 Chamando API de acertos...')
-    const result = await api.acertos.list()
-    console.log('✅ Acertos retornados da API:', result.length, result)
-    return result
+    return await api.acertos.list()
   } catch (error) {
     console.error('❌ Erro ao buscar acertos:', error)
     return []

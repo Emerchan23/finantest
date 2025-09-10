@@ -1,9 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Trash2, Download, Edit, CheckCheck, X } from "lucide-react"
 import { fmtCurrency } from "@/lib/format"
@@ -11,7 +14,7 @@ import OrcamentoForm from "@/components/orcamento-form"
 import { getOrcamentos, deleteOrcamento, aprovarOrcamento, desaprovarOrcamento, type Orcamento } from "@/lib/orcamentos"
 import { AppHeader } from "@/components/app-header"
 import { makeOrcamentoHTML, downloadPDF } from "@/lib/print"
-import { ensureDefaultEmpresa } from "@/lib/empresas"
+// Removed empresa imports - system simplified
 import { EmailModal } from "@/components/email-modal"
 
 // Using backend types
@@ -28,6 +31,8 @@ export default function OrcamentosPage() {
   const [orcamentos, setOrcamentos] = useState<LocalOrcamento[]>([])
   const [orcamentoEditando, setOrcamentoEditando] = useState<LocalOrcamento | null>(null)
   const [tabAtiva, setTabAtiva] = useState("criar")
+  const [anoSelecionado, setAnoSelecionado] = useState<number>(new Date().getFullYear())
+  const [filtroTexto, setFiltroTexto] = useState<string>("")
 
   const reload = async () => {
     try {
@@ -50,9 +55,29 @@ export default function OrcamentosPage() {
     }
   }, [])
 
+  const orcamentosFiltrados = useMemo(() => {
+    return orcamentos.filter(orcamento => {
+      const anoOrcamento = new Date(orcamento.data).getFullYear()
+      if (anoOrcamento !== anoSelecionado) return false
+      
+      if (!filtroTexto.trim()) return true
+      
+      const textoFiltro = filtroTexto.toLowerCase().trim()
+      const numeroOrcamento = orcamento.numero?.toLowerCase() || ''
+      const nomeCliente = orcamento.cliente?.nome?.toLowerCase() || ''
+      const dataFormatada = new Date(orcamento.data).toLocaleDateString('pt-BR')
+      const numeroDispensa = orcamento.numero_dispensa?.toLowerCase() || ''
+      const numeroPregao = orcamento.numero_pregao?.toLowerCase() || ''
+      
+      return numeroOrcamento.includes(textoFiltro) ||
+             nomeCliente.includes(textoFiltro) ||
+             dataFormatada.includes(textoFiltro) ||
+             numeroDispensa.includes(textoFiltro) ||
+             numeroPregao.includes(textoFiltro)
+    })
+  }, [orcamentos, anoSelecionado, filtroTexto])
+
   const handleBaixarPDF = async (o: LocalOrcamento) => {
-    // Garante empresa atual definida nas Configurações Gerais
-    await ensureDefaultEmpresa()
     // Passa o total calculado para o gerador de HTML
     const withTotal = { ...o, total: totalOrcamento(o) }
     const html = await makeOrcamentoHTML(withTotal as any)
@@ -111,7 +136,39 @@ export default function OrcamentosPage() {
           <TabsContent value="salvos" className="mt-4">
             <Card>
               <CardHeader>
-                <CardTitle>Orçamentos Salvos</CardTitle>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <CardTitle>Orçamentos Salvos</CardTitle>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="filtro-busca" className="text-sm whitespace-nowrap">Buscar:</Label>
+                      <Input
+                        id="filtro-busca"
+                        placeholder="Nº orçamento, cliente, data, dispensa..."
+                        value={filtroTexto}
+                        onChange={(e) => setFiltroTexto(e.target.value)}
+                        className="w-64"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="ano-orcamentos" className="text-sm whitespace-nowrap">Ano:</Label>
+                      <Select value={String(anoSelecionado)} onValueChange={(value) => setAnoSelecionado(Number(value))}>
+                        <SelectTrigger className="w-24" id="ano-orcamentos">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 10 }, (_, i) => {
+                            const ano = new Date().getFullYear() - 5 + i
+                            return (
+                              <SelectItem key={ano} value={String(ano)}>
+                                {ano}
+                              </SelectItem>
+                            )
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="overflow-x-auto">
                 <Table>
@@ -121,19 +178,20 @@ export default function OrcamentosPage() {
                       <TableHead>Cliente</TableHead>
                       <TableHead>Data</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Modalidade/Número</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                       <TableHead className="w-32" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {orcamentos.length === 0 ? (
+                    {orcamentosFiltrados.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground">
-                          Nenhum orçamento salvo.
+                        <TableCell colSpan={7} className="text-center text-muted-foreground">
+                          Nenhum orçamento salvo para o ano {anoSelecionado}.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      orcamentos.map((o) => (
+                      orcamentosFiltrados.map((o) => (
                         <TableRow key={o.id}>
                           <TableCell>{o.numero}</TableCell>
                           <TableCell>{o.cliente?.nome}</TableCell>
@@ -146,6 +204,31 @@ export default function OrcamentosPage() {
                             }`}>
                               {o.status === 'aprovado' ? 'Aprovado' : 'Pendente'}
                             </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              {o.modalidade === 'licitado' ? (
+                                <div>
+                                  <span className="font-medium text-blue-700">PREGÃO ELETRÔNICO</span>
+                                  {o.numero_pregao && (
+                                    <div className="text-xs text-muted-foreground">
+                                      Pregão Eletrônico: {o.numero_pregao}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : o.modalidade === 'dispensa' ? (
+                                <div>
+                                  <span className="font-medium text-green-700">DISPENSA</span>
+                                  {o.numero_dispensa && (
+                                    <div className="text-xs text-muted-foreground">
+                                      Dispensa: {o.numero_dispensa}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">-</span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">{fmtCurrency(totalOrcamento(o))}</TableCell>
                           <TableCell className="flex justify-end gap-2">
@@ -218,13 +301,31 @@ export default function OrcamentosPage() {
                               size="icon"
                               title="Excluir orçamento"
                               onClick={async () => {
+                                if (!confirm("Excluir este orçamento?")) return
                                 try {
                                   const success = await deleteOrcamento(o.id)
                                   if (success) {
                                     await reload()
                                   }
-                                } catch (error) {
+                                } catch (error: any) {
                                   console.error("Erro ao deletar orçamento:", error)
+                                  if (error?.status === 400) {
+                                    try {
+                                      const response = await fetch(`/api/orcamentos/${o.id}/dependencies`)
+                                      const dependencies = await response.json()
+                                      
+                                      let detailsMessage = `Não é possível excluir o orçamento "${o.numero}" porque ele está sendo usado em:\n\n`
+                                      if (dependencies.vendas_relacionadas?.count > 0) detailsMessage += `• ${dependencies.vendas_relacionadas.count} venda(s)\n`
+                                      if (dependencies.acertos_relacionados?.count > 0) detailsMessage += `• ${dependencies.acertos_relacionados.count} acerto(s)\n`
+                                      detailsMessage += "\nExclua primeiro esses registros para poder deletar o orçamento."
+                                      
+                                      alert(detailsMessage)
+                                    } catch {
+                                      alert("Não é possível excluir este orçamento pois ele possui registros associados. Exclua primeiro os registros relacionados.")
+                                    }
+                                  } else {
+                                    alert("Erro ao excluir orçamento")
+                                  }
                                 }
                               }}
                             >

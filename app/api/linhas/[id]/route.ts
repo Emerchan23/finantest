@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '../../../../lib/db'
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
     
     // Build dynamic update query based on provided fields
@@ -31,9 +31,20 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
+    
+    // Verificar se a linha de venda tem dependências (está associada a um acerto)
+    const linhaAtual = db.prepare(`
+      SELECT acertoId FROM linhas_venda WHERE id = ?
+    `).get(id) as { acertoId: string | null } | undefined
+    
+    if (linhaAtual?.acertoId) {
+      return NextResponse.json({ 
+        error: 'Não é possível excluir esta linha de venda pois ela está associada a um acerto.' 
+      }, { status: 400 })
+    }
     
     const result = db.prepare('DELETE FROM linhas_venda WHERE id = ?').run(id)
     

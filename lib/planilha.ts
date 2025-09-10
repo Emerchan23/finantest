@@ -4,7 +4,7 @@
 
 import { api, type LinhaVenda } from "./api-client"
 import { emitChange } from "./data-store"
-import { getCurrentEmpresaId } from "./empresas"
+// Removed empresa imports - system simplified
 
 export type { LinhaVenda } from "./api-client"
 
@@ -13,13 +13,7 @@ export async function getLinhas(): Promise<LinhaVenda[]> {
 }
 
 export async function saveLinha(payload: Omit<LinhaVenda, "id" | "createdAt"> & { id?: string }) {
-  // Ensure companyId is set for new records
-  if (!payload.id && !payload.companyId) {
-    const currentCompanyId = await getCurrentEmpresaId()
-    if (currentCompanyId) {
-      payload.companyId = currentCompanyId
-    }
-  }
+  // System simplified - no company logic needed
   
   if (payload.id) {
     await api.linhas.update(payload.id, payload as Partial<LinhaVenda>)

@@ -11,10 +11,10 @@ function generateId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 import { AppHeader } from "@/components/app-header"
-import { ensureDefaultEmpresa } from "@/lib/empresas"
+// Removed empresa imports - system simplified
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Label } from "@/components/ui/label"
@@ -98,8 +98,6 @@ export default function OutrosNegociosPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        // Garantir que existe uma empresa padrão selecionada
-        await ensureDefaultEmpresa()
         const data = await loadOutrosNegocios()
         setItems(data)
       } catch (error) {
@@ -185,20 +183,16 @@ export default function OutrosNegociosPage() {
 
     try {
       let next: OutroNegocio[]
-      // Mapear campos para o formato esperado pela API (excluir campos que não existem na tabela)
+      // Mapear campos para o formato esperado pela API
       const apiPayload = {
-        tipo: payload.tipo,
+        tipo: payload.tipo === 'emprestimo' ? 'despesa' : 'receita', // Map emprestimo->despesa, venda->receita
         descricao: payload.descricao,
         valor: payload.valor,
-        data_transacao: payload.data,
-        cliente_id: payload.pessoa,
-        categoria: null,
-        forma_pagamento: null,
-        observacoes: null,
-        anexos: null,
-        juros_ativo: payload.jurosAtivo ? 1 : 0,
+        data_transacao: payload.data, // API expects data_transacao, not data
+        cliente_id: payload.pessoa, // API expects cliente_id, not pessoa
+        juros_ativo: payload.jurosAtivo ? 1 : 0, // Convert boolean to integer
         juros_mes_percent: payload.jurosAtivo ? Number(payload.jurosMesPercent || 0) : 0,
-        multa_ativa: payload.multaAtiva ? 1 : 0,
+        multa_ativa: payload.multaAtiva ? 1 : 0, // Convert boolean to integer
         multa_percent: payload.multaAtiva ? Number(payload.multaPercent || 0) : 0
       }
       
@@ -224,9 +218,24 @@ export default function OutrosNegociosPage() {
       await api.outrosNegocios.delete(item.id)
       const updatedItems = await loadOutrosNegocios()
       setItems(updatedItems)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao excluir:", error)
-      alert("Erro ao excluir. Tente novamente.")
+      if (error?.status === 400) {
+        try {
+          const response = await fetch(`/api/outros-negocios/${item.id}/dependencies`)
+          const dependencies = await response.json()
+          
+          let detailsMessage = `Não é possível excluir este outro negócio porque ele está sendo usado em:\n\n`
+          if (dependencies.acertos_relacionados?.count > 0) detailsMessage += `• ${dependencies.acertos_relacionados.count} acerto(s)\n`
+          detailsMessage += "\nExclua primeiro esses registros para poder deletar o outro negócio."
+          
+          alert(detailsMessage)
+        } catch {
+          alert("Não é possível excluir este outro negócio pois ele possui registros associados. Exclua primeiro os registros relacionados.")
+        }
+      } else {
+        alert("Erro ao excluir. Tente novamente.")
+      }
     }
   }
 
@@ -309,6 +318,9 @@ export default function OutrosNegociosPage() {
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>{isEditing ? "Editar lançamento" : "Novo lançamento"}</DialogTitle>
+                <DialogDescription>
+                  {isEditing ? "Edite as informações do lançamento" : "Adicione um novo empréstimo ou venda"}
+                </DialogDescription>
               </DialogHeader>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -549,6 +561,9 @@ export default function OutrosNegociosPage() {
                                 <DialogContent className="max-w-lg">
                                   <DialogHeader>
                                     <DialogTitle>Pagamentos</DialogTitle>
+                                    <DialogDescription>
+                                      Histórico de pagamentos realizados para este lançamento.
+                                    </DialogDescription>
                                   </DialogHeader>
                                   <div className="space-y-2">
                                     {(i.pagamentos ?? []).length === 0 && (
@@ -657,6 +672,9 @@ export default function OutrosNegociosPage() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Registrar pagamento</DialogTitle>
+            <DialogDescription>
+              Registre um pagamento parcial ou total para este lançamento.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="space-y-1.5">

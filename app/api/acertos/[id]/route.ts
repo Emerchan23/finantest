@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '../../../../lib/db'
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
     
     const acerto = db.prepare(`
       SELECT * FROM acertos WHERE id = ?
@@ -14,12 +14,21 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
     
     // Parse JSON fields
+    const acertoData = acerto as {
+      id: string;
+      linhaIds: string | null;
+      distribuicoes: string | null;
+      despesas: string | null;
+      ultimoRecebimentoBanco: string | null;
+      [key: string]: unknown;
+    }
+    
     const parsedAcerto = {
       ...acerto,
-      linhaIds: (acerto as any).linhaIds ? JSON.parse((acerto as any).linhaIds) : [],
-      distribuicoes: (acerto as any).distribuicoes ? JSON.parse((acerto as any).distribuicoes) : [],
-      despesas: (acerto as any).despesas ? JSON.parse((acerto as any).despesas) : [],
-      ultimoRecebimentoBanco: (acerto as any).ultimoRecebimentoBanco ? JSON.parse((acerto as any).ultimoRecebimentoBanco) : null
+      linhaIds: acertoData.linhaIds ? JSON.parse(acertoData.linhaIds) : [],
+      distribuicoes: acertoData.distribuicoes ? JSON.parse(acertoData.distribuicoes) : [],
+      despesas: acertoData.despesas ? JSON.parse(acertoData.despesas) : [],
+      ultimoRecebimentoBanco: acertoData.ultimoRecebimentoBanco ? JSON.parse(acertoData.ultimoRecebimentoBanco) : null
     }
     
     return NextResponse.json(parsedAcerto)
@@ -29,9 +38,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
     
     // Check if acerto exists
@@ -82,9 +91,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
     
     // Check if acerto exists
     const existingAcerto = db.prepare('SELECT id FROM acertos WHERE id = ?').get(id)

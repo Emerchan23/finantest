@@ -44,7 +44,7 @@ Sistema ERP completo desenvolvido em Next.js com backend em Node.js, focado em g
 
 ### 2.3 Porta e Configuração
 - **Porta padrão**: 3145
-- **Banco de dados**: SQLite em `/data/erp.sqlite`
+- **Banco de dados**: SQLite em `../banco-de-dados/erp.sqlite`
 - **Configuração**: Variáveis de ambiente via `.env.local`
 
 ---
@@ -307,7 +307,7 @@ Sistema ERP completo desenvolvido em Next.js com backend em Node.js, focado em g
 ### 8.1 Ambiente de Desenvolvimento
 - Configuração local com `npm run dev`
 - Hot reload para desenvolvimento rápido
-- Banco SQLite local em `./data/`
+- Banco SQLite local em `../banco-de-dados/`
 - Logs detalhados para debugging
 
 ### 8.2 Ambiente de Produção

@@ -16,20 +16,13 @@ RUN npm install
 # Copiar código fonte
 COPY . .
 
-# Criar usuário não-root
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
 # Criar diretório de dados e definir permissões
-RUN mkdir -p /app/data
-RUN chown -R nextjs:nodejs /app
+RUN mkdir -p /app/data /data
 RUN chmod -R 755 /app/data
+RUN chmod -R 777 /data
 
 # Executar instalação automática
 RUN node install.js || echo "Install script completed"
-
-# Mudar para usuário não-root
-USER nextjs
 
 # Expor porta
 EXPOSE 3000

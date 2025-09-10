@@ -66,11 +66,11 @@ import { CurrencyInput } from "@/components/ui/currency-input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Trash2, ExternalLink, LockKeyhole, ChevronDown, ChevronRight, Save, Download } from "lucide-react"
+import { Plus, Trash2, ExternalLink, LockKeyhole, ChevronDown, ChevronRight, Save, Download, Maximize2, Minimize2 } from "lucide-react"
 import { fmtCurrency } from "@/lib/format"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
-import { ERP_CHANGED_EVENT, getClientes } from "@/lib/data-store"
+import { ERP_CHANGED_EVENT, getClientes, getProdutos, saveProduto } from "@/lib/data-store"
 import { saveOrcamento, getOrcamentos, type Orcamento, type OrcamentoCliente } from "@/lib/orcamentos"
 import { api } from "@/lib/api-client"
 
@@ -111,10 +111,15 @@ type OrcamentoFormProps = {
 
 export function OrcamentoForm({ orcamentoParaEdicao, onSalvoComSucesso }: OrcamentoFormProps = {}) {
   const { toast } = useToast()
+  const [isMaximized, setIsMaximized] = useState(false)
   const [clientes, setClientes] = useState<any[]>([])
   const [clienteIdSel, setClienteIdSel] = useState<string>("")
   const [cliente, setCliente] = useState<ClienteState>({ nome: "" })
   const [observacoes, setObservacoes] = useState("")
+  const [dataValidade, setDataValidade] = useState("")
+  const [modalidade, setModalidade] = useState<"compra_direta" | "licitado" | "dispensa">("compra_direta")
+  const [numeroPregao, setNumeroPregao] = useState("")
+  const [numeroDispensa, setNumeroDispensa] = useState("")
   const [itens, setItens] = useState<FormOrcamentoItem[]>([
     { descricao: "", marca: "", quantidade: 1, valorUnitario: 0, linkRef: "", custoRef: undefined },
   ])
@@ -127,6 +132,10 @@ export function OrcamentoForm({ orcamentoParaEdicao, onSalvoComSucesso }: Orcame
         cliente,
         clienteIdSel,
         observacoes,
+        dataValidade,
+        modalidade,
+        numeroPregao,
+        numeroDispensa,
         itens
       }
       localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft))
@@ -145,6 +154,10 @@ export function OrcamentoForm({ orcamentoParaEdicao, onSalvoComSucesso }: Orcame
         setCliente(draft.cliente || { nome: "" })
         setClienteIdSel(draft.clienteIdSel || "")
         setObservacoes(draft.observacoes || "")
+        setDataValidade(draft.dataValidade || "")
+        setModalidade(draft.modalidade || "compra_direta")
+        setNumeroPregao(draft.numeroPregao || "")
+        setNumeroDispensa(draft.numeroDispensa || "")
         setItens(draft.itens || [{ descricao: "", marca: "", quantidade: 1, valorUnitario: 0, linkRef: "", custoRef: undefined }])
         setHasDraft(true)
         toast({ title: "Rascunho carregado!", description: "Seus dados foram restaurados." })
@@ -206,13 +219,13 @@ export function OrcamentoForm({ orcamentoParaEdicao, onSalvoComSucesso }: Orcame
   useEffect(() => {
     const timer = setTimeout(() => {
       // Só salva se houver algum conteúdo
-      if (cliente.nome.trim() || observacoes.trim() || itens.some(item => item.descricao.trim())) {
+      if (cliente.nome.trim() || observacoes.trim() || dataValidade.trim() || itens.some(item => item.descricao.trim())) {
         saveDraft()
       }
     }, 2000) // Salva após 2 segundos de inatividade
 
     return () => clearTimeout(timer)
-  }, [cliente, observacoes, itens, clienteIdSel])
+  }, [cliente, observacoes, dataValidade, itens, clienteIdSel])
 
   // Seleção do cliente cadastrado preenche o formulário
   useEffect(() => {
@@ -235,6 +248,16 @@ export function OrcamentoForm({ orcamentoParaEdicao, onSalvoComSucesso }: Orcame
     if (orcamentoParaEdicao) {
       setCliente(orcamentoParaEdicao.cliente || { nome: "" })
       setObservacoes(orcamentoParaEdicao.observacoes || "")
+      
+      // Formatar data de validade para o input (YYYY-MM-DD)
+      const dataValidadeFormatada = (orcamentoParaEdicao as any).data_validade 
+        ? new Date((orcamentoParaEdicao as any).data_validade).toISOString().split('T')[0]
+        : ""
+      setDataValidade(dataValidadeFormatada)
+      
+      setModalidade((orcamentoParaEdicao as any).modalidade || "compra_direta")
+      setNumeroPregao((orcamentoParaEdicao as any).numero_pregao || "")
+      setNumeroDispensa((orcamentoParaEdicao as any).numero_dispensa || "")
       
       // Converte itens do backend para o formato do formulário
       const itensForm = orcamentoParaEdicao.itens.map(item => ({
@@ -307,17 +330,53 @@ export function OrcamentoForm({ orcamentoParaEdicao, onSalvoComSucesso }: Orcame
         numero: orcamentoParaEdicao.numero,
         cliente_id: cliente_id,
         data_orcamento: orcamentoParaEdicao.data,
+        data_validade: dataValidade || null,
         observacoes,
+        modalidade,
+        numero_pregao: modalidade === "licitado" && numeroPregao ? `${numeroPregao}/${new Date().getFullYear()}` : null,
+        numero_dispensa: modalidade === "dispensa" && numeroDispensa ? `${numeroDispensa}/${new Date().getFullYear()}` : null,
         itens: backendItens
       } : { 
         numero: numero, // Enviar o número completo no formato "número/ano"
         cliente_id: cliente_id,
         data_orcamento: new Date().toISOString(),
+        data_validade: dataValidade || null,
         observacoes,
+        modalidade,
+        numero_pregao: modalidade === "licitado" && numeroPregao ? `${numeroPregao}/${new Date().getFullYear()}` : null,
+        numero_dispensa: modalidade === "dispensa" && numeroDispensa ? `${numeroDispensa}/${new Date().getFullYear()}` : null,
         itens: backendItens
       }
       
       const result = await saveOrcamento(dadosParaSalvar)
+      
+      // Salvar produtos únicos no catálogo automaticamente
+      if (result && !orcamentoParaEdicao) {
+        try {
+          const produtosExistentes = await getProdutos()
+          const nomesExistentes = new Set(produtosExistentes.map(p => p.nome.toLowerCase().trim()))
+          
+          for (const item of itens) {
+            const nomeItem = item.descricao.toLowerCase().trim()
+            if (nomeItem && !nomesExistentes.has(nomeItem)) {
+              // Criar produto no catálogo
+              await saveProduto({
+                nome: item.descricao,
+                marca: item.marca || undefined,
+                precoVenda: item.valorUnitario,
+                custo: item.custoRef || 0,
+                taxaImposto: 0,
+                linkRef: item.linkRef || undefined,
+                custoRef: item.custoRef || undefined
+              })
+              nomesExistentes.add(nomeItem) // Evitar duplicatas no mesmo orçamento
+            }
+          }
+        } catch (error) {
+          console.error('Erro ao salvar produtos no catálogo:', error)
+          // Não falha o orçamento se houver erro ao salvar produtos
+        }
+      }
       
       if (result) {
         if (!orcamentoParaEdicao) {
@@ -325,6 +384,7 @@ export function OrcamentoForm({ orcamentoParaEdicao, onSalvoComSucesso }: Orcame
           setCliente({ nome: "" })
           setClienteIdSel("")
           setObservacoes("")
+          setDataValidade("")
           setItens([{ descricao: "", marca: "", quantidade: 1, valorUnitario: 0, linkRef: "", custoRef: undefined }])
           clearDraft() // Limpa o rascunho após salvar com sucesso
         }
@@ -350,7 +410,31 @@ export function OrcamentoForm({ orcamentoParaEdicao, onSalvoComSucesso }: Orcame
   }
 
   return (
-    <div className="grid gap-6">
+    <div className={cn(
+      "grid gap-6 transition-all duration-300",
+      isMaximized ? "fixed inset-0 z-50 bg-background p-6 overflow-auto" : ""
+    )}>
+      {/* Botão de expandir/minimizar */}
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsMaximized(!isMaximized)}
+          className="mb-2"
+        >
+          {isMaximized ? (
+            <>
+              <Minimize2 className="h-4 w-4 mr-2" />
+              Minimizar
+            </>
+          ) : (
+            <>
+              <Maximize2 className="h-4 w-4 mr-2" />
+              Expandir
+            </>
+          )}
+        </Button>
+      </div>
       {/* Selecionar cliente cadastrado */}
       <Card>
         <CardHeader>
@@ -496,12 +580,74 @@ export function OrcamentoForm({ orcamentoParaEdicao, onSalvoComSucesso }: Orcame
             )}
           </div>
         </CardHeader>
-        <CardContent>
-          <Input
-            placeholder="Condições de pagamento, validade do orçamento, etc."
-            value={observacoes}
-            onChange={(e) => setObservacoes(e.target.value)}
-          />
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="observacoes">Observações</Label>
+            <Input
+              id="observacoes"
+              placeholder="Condições de pagamento, validade do orçamento, etc."
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="data-validade">Data de Validade</Label>
+            <Input
+              id="data-validade"
+              type="date"
+              value={dataValidade}
+              onChange={(e) => setDataValidade(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Se não informada, será aplicada a validade padrão configurada no sistema
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Modalidade de Compra */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Modalidade de Compra</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Modalidade</Label>
+            <Select value={modalidade} onValueChange={(value: "compra_direta" | "licitado" | "dispensa") => setModalidade(value)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="compra_direta">Compra Direta</SelectItem>
+                <SelectItem value="licitado">Pregão Eletrônico</SelectItem>
+                <SelectItem value="dispensa">Dispensa</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {modalidade === "licitado" && (
+            <div className="space-y-2">
+              <Label htmlFor="numero-pregao">Número do Pregão (opcional)</Label>
+              <Input
+                id="numero-pregao"
+                placeholder="Ex.: 87"
+                value={numeroPregao}
+                onChange={(e) => setNumeroPregao(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">O ano será adicionado automaticamente</p>
+            </div>
+          )}
+          {modalidade === "dispensa" && (
+            <div className="space-y-2">
+              <Label htmlFor="numero-dispensa">Número da Dispensa (opcional)</Label>
+              <Input
+                id="numero-dispensa"
+                placeholder="Ex.: 82947"
+                value={numeroDispensa}
+                onChange={(e) => setNumeroDispensa(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">O ano será adicionado automaticamente</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -537,6 +683,10 @@ export function OrcamentoForm({ orcamentoParaEdicao, onSalvoComSucesso }: Orcame
             setCliente({ nome: "" })
             setClienteIdSel("")
             setObservacoes("")
+            setDataValidade("")
+            setModalidade("compra_direta")
+            setNumeroPregao("")
+            setNumeroDispensa("")
             setItens([{ descricao: "", marca: "", quantidade: 1, valorUnitario: 0, linkRef: "", custoRef: undefined }])
             clearDraft()
           }}
@@ -602,7 +752,7 @@ function ItemRow({
                       />
                       {item.linkRef ? (
                         <a
-                          href={item.linkRef}
+                          href={item.linkRef.startsWith('http://') || item.linkRef.startsWith('https://') ? item.linkRef : `https://${item.linkRef}`}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex h-10 w-10 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent"

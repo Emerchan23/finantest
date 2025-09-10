@@ -165,7 +165,7 @@ function setupEnvironment() {
   if (!fs.existsSync(envFile)) {
     const envContent = `# Configurações do Sistema ERP
 NEXT_PUBLIC_API_URL=http://localhost:3145
-DB_PATH=./data/erp.sqlite
+DB_PATH=../banco-de-dados/erp.sqlite
 NODE_ENV=development
 NEXT_TELEMETRY_DISABLED=1
 `;
@@ -264,10 +264,7 @@ child.on('close', (code) => {
   console.log(\`Docker finalizado com código \${code}\`);
 });
 
-process.on('SIGINT', () => {
-  spawn('docker-compose', ['down'], { stdio: 'inherit', cwd: __dirname });
-  child.kill('SIGINT');
-});
+// Removido process.on('SIGINT') duplicado para evitar MaxListenersExceededWarning
 `;
   
   fs.writeFileSync(path.join(process.cwd(), 'start-prod.js'), startProdScript);
@@ -294,8 +291,8 @@ function showCompletionMessage() {
   log('  http://localhost:3145 (produção)', 'bright');
   
   log('\n📁 Banco de dados:', 'cyan');
-  log('  Localizado em: ./data/erp.sqlite', 'bright');
-  log('  (Fora do container Docker)', 'bright');
+  log('  Localizado em: ../banco-de-dados/erp.sqlite', 'bright');
+  log('  (Pasta externa ao projeto)', 'bright');
   
   log('\n✨ Sistema pronto para uso!', 'magenta');
 }

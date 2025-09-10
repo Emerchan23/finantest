@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     if (!userPrefs) {
       // Se não existir, criar preferências padrão
       const defaultPrefs = {
-        currentEmpresaId: null,
+        // Removed currentEmpresaId - system simplified
         theme: 'light',
         language: 'pt-BR'
       }

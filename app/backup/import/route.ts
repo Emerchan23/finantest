@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Função helper para inserir dados
-    const insertData = (tableName: string, records: any[]) => {
+    const insertData = (tableName: string, records: Record<string, unknown>[]) => {
       if (!records || records.length === 0) return
       
       const firstRecord = records[0]

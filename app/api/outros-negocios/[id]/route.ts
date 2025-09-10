@@ -66,6 +66,21 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       );
     }
     
+    // Verificar se há dependências em outras tabelas
+    const acertosRelacionados = db.prepare(`
+      SELECT COUNT(*) as count 
+      FROM acertos 
+      WHERE outro_negocio_id = ?
+    `).get(id) as { count: number }
+    
+    const totalDependencias = acertosRelacionados.count
+    
+    if (totalDependencias > 0) {
+      return NextResponse.json({ 
+        error: 'Não é possível excluir este outro negócio pois ele possui registros associados (acertos).' 
+      }, { status: 400 })
+    }
+    
     // Primeiro, excluir os pagamentos relacionados
     db.prepare('DELETE FROM pagamentos_parciais WHERE outro_negocio_id = ?').run(id);
     
@@ -78,8 +93,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         { status: 404 }
       );
     }
-    
-    return NextResponse.json({ message: 'Outro negócio excluído com sucesso' });
+
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Erro ao excluir outro negócio:', error);
     return NextResponse.json(
