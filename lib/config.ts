@@ -31,6 +31,10 @@ export type Config = {
   tamanhoTexto?: number
   logoPersonalizada?: string
   validadeOrcamento?: number
+  // Templates de e-mail
+  emailTemplateOrcamento?: string
+  emailTemplateVale?: string
+  emailTemplateRelatorio?: string
   [key: string]: any
 }
 
@@ -96,6 +100,9 @@ export async function saveConfig(config: Partial<Config>): Promise<void> {
         smtpPassword: result.config.smtp_password || '',
         smtpFromName: result.config.smtp_from_name || '',
         smtpFromEmail: result.config.smtp_from_email || '',
+        emailTemplateOrcamento: result.config.email_template_orcamento || '',
+        emailTemplateVale: result.config.email_template_vale || '',
+        emailTemplateRelatorio: result.config.email_template_relatorio || '',
         corPrimaria: result.config.cor_primaria || '#3b82f6',
         corSecundaria: result.config.cor_secundaria || '#64748b',
         corTexto: result.config.cor_texto || '#1f2937',
@@ -153,6 +160,9 @@ export async function loadConfig(): Promise<Config> {
       smtpPassword: config.smtp_password || '',
       smtpFromName: config.smtp_from_name || '',
       smtpFromEmail: config.smtp_from_email || '',
+      emailTemplateOrcamento: config.email_template_orcamento || '',
+      emailTemplateVale: config.email_template_vale || '',
+      emailTemplateRelatorio: config.email_template_relatorio || '',
       corPrimaria: config.cor_primaria || '#3b82f6',
       corSecundaria: config.cor_secundaria || '#64748b',
       corTexto: config.cor_texto || '#1f2937',

@@ -112,6 +112,20 @@ export async function POST(request: NextRequest) {
         updateValues.push(data.smtpFromEmail)
       }
       
+      // Email templates
+      if (data.emailTemplateOrcamento !== undefined) {
+        updateFields.push('email_template_orcamento = ?')
+        updateValues.push(data.emailTemplateOrcamento)
+      }
+      if (data.emailTemplateVale !== undefined) {
+        updateFields.push('email_template_vale = ?')
+        updateValues.push(data.emailTemplateVale)
+      }
+      if (data.emailTemplateRelatorio !== undefined) {
+        updateFields.push('email_template_relatorio = ?')
+        updateValues.push(data.emailTemplateRelatorio)
+      }
+      
       if (updateFields.length > 0) {
         updateFields.push('updated_at = CURRENT_TIMESTAMP')
         updateValues.push(existingEmpresa.id)

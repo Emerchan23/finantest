@@ -39,6 +39,13 @@ export default function ConfiguracoesPage() {
   // Estado de loading para teste de email
   const [testingEmail, setTestingEmail] = useState(false)
   
+  // Templates de e-mail
+  const [emailTemplates, setEmailTemplates] = useState({
+    orcamento: "Prezado(a) cliente,\n\nSegue em anexo o orçamento solicitado.\n\nAtenciosamente,\n{nomeEmpresa}",
+    vale: "Prezado(a),\n\nSegue em anexo o vale solicitado.\n\nAtenciosamente,\n{nomeEmpresa}",
+    relatorio: "Prezado(a),\n\nSegue em anexo o relatório solicitado.\n\nAtenciosamente,\n{nomeEmpresa}"
+  })
+  
   // Configurações de personalização
   const [personalizacaoConfig, setPersonalizacaoConfig] = useState({
     corPrimaria: "#3b82f6",
@@ -95,6 +102,13 @@ export default function ConfiguracoesPage() {
         password: config.smtpPassword || "",
         fromName: config.smtpFromName || "",
         fromEmail: config.smtpFromEmail || ""
+      })
+
+      // Carregar templates de e-mail
+      setEmailTemplates({
+        orcamento: config.emailTemplateOrcamento || "Prezado(a) cliente,\n\nSegue em anexo o orçamento solicitado.\n\nAtenciosamente,\n{nomeEmpresa}",
+        vale: config.emailTemplateVale || "Prezado(a),\n\nSegue em anexo o vale solicitado.\n\nAtenciosamente,\n{nomeEmpresa}",
+        relatorio: config.emailTemplateRelatorio || "Prezado(a),\n\nSegue em anexo o relatório solicitado.\n\nAtenciosamente,\n{nomeEmpresa}"
       })
 
       // Carregar configurações de personalização
@@ -246,6 +260,31 @@ export default function ConfiguracoesPage() {
     }
   }
 
+  const handleSalvarTemplates = async () => {
+    try {
+      const configData = {
+        emailTemplateOrcamento: emailTemplates.orcamento,
+        emailTemplateVale: emailTemplates.vale,
+        emailTemplateRelatorio: emailTemplates.relatorio
+      }
+      
+      const currentConfig = getConfig()
+      saveConfig({ ...currentConfig, ...configData })
+      
+      toast({
+        title: "Sucesso",
+        description: "Templates de e-mail salvos com sucesso!",
+      })
+    } catch (error) {
+      console.error('Erro ao salvar templates:', error)
+      toast({
+        title: "Erro",
+        description: "Erro ao salvar templates de e-mail",
+        variant: "destructive",
+      })
+    }
+  }
+
   const handleTestarSmtp = async () => {
     try {
       setTestingEmail(true)
@@ -362,17 +401,34 @@ export default function ConfiguracoesPage() {
     if (!file) return
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('merge', mergeImport.toString())
+      // Ler o arquivo como texto
+      const fileContent = await file.text()
+      let backupData
+      
+      try {
+        backupData = JSON.parse(fileContent)
+      } catch (parseError) {
+        console.error('Erro ao fazer parse do arquivo:', parseError)
+        toast({
+          title: "Erro",
+          description: "Arquivo de backup inválido. Certifique-se de que é um arquivo JSON válido.",
+          variant: "destructive",
+        })
+        return
+      }
       
       const response = await fetch('/api/backup/import', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(backupData),
       })
       
+      const result = await response.json()
+      
       if (!response.ok) {
-        throw new Error('Erro ao importar backup')
+        throw new Error(result.error || 'Erro ao importar backup')
       }
       
       toast({
@@ -384,9 +440,10 @@ export default function ConfiguracoesPage() {
       window.location.reload()
     } catch (error) {
       console.error('Erro ao importar backup:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido ao importar backup'
       toast({
         title: "Erro",
-        description: "Erro ao importar backup",
+        description: errorMessage,
         variant: "destructive",
       })
     }
@@ -856,6 +913,65 @@ export default function ConfiguracoesPage() {
                     )}
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Templates de E-mail */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Templates de E-mail</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Configure mensagens padrão para diferentes tipos de envio de e-mail.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-6">
+                  <div>
+                    <Label htmlFor="templateOrcamento">Template para Orçamentos</Label>
+                    <textarea
+                      id="templateOrcamento"
+                      className="w-full min-h-[120px] p-3 border rounded-md resize-vertical"
+                      value={emailTemplates.orcamento}
+                      onChange={(e) => setEmailTemplates(s => ({ ...s, orcamento: e.target.value }))}
+                      placeholder="Prezado(a) cliente,&#10;&#10;Segue em anexo o orçamento solicitado.&#10;&#10;Atenciosamente,&#10;{nomeEmpresa}"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Variáveis disponíveis: &#123;nomeEmpresa&#125;, &#123;nomeCliente&#125;, &#123;numeroOrcamento&#125;
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="templateVale">Template para Vales</Label>
+                    <textarea
+                      id="templateVale"
+                      className="w-full min-h-[120px] p-3 border rounded-md resize-vertical"
+                      value={emailTemplates.vale}
+                      onChange={(e) => setEmailTemplates(s => ({ ...s, vale: e.target.value }))}
+                      placeholder="Prezado(a),&#10;&#10;Segue em anexo o vale solicitado.&#10;&#10;Atenciosamente,&#10;{nomeEmpresa}"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Variáveis disponíveis: &#123;nomeEmpresa&#125;, &#123;nomeCliente&#125;, &#123;numeroVale&#125;
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="templateRelatorio">Template para Relatórios</Label>
+                    <textarea
+                      id="templateRelatorio"
+                      className="w-full min-h-[120px] p-3 border rounded-md resize-vertical"
+                      value={emailTemplates.relatorio}
+                      onChange={(e) => setEmailTemplates(s => ({ ...s, relatorio: e.target.value }))}
+                      placeholder="Prezado(a),&#10;&#10;Segue em anexo o relatório solicitado.&#10;&#10;Atenciosamente,&#10;{nomeEmpresa}"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Variáveis disponíveis: &#123;nomeEmpresa&#125;, &#123;periodo&#125;, &#123;tipoRelatorio&#125;
+                    </p>
+                  </div>
+                </div>
+                
+                <Button onClick={handleSalvarTemplates} className="w-full">
+                  Salvar Templates de E-mail
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>

@@ -347,6 +347,25 @@ try {
   // Coluna já existe
 }
 
+// Adicionar colunas para templates de e-mail
+try {
+  db.exec(`ALTER TABLE empresas ADD COLUMN email_template_orcamento TEXT`)
+} catch (error) {
+  // Coluna já existe
+}
+
+try {
+  db.exec(`ALTER TABLE empresas ADD COLUMN email_template_vale TEXT`)
+} catch (error) {
+  // Coluna já existe
+}
+
+try {
+  db.exec(`ALTER TABLE empresas ADD COLUMN email_template_relatorio TEXT`)
+} catch (error) {
+  // Coluna já existe
+}
+
 // Adicionar colunas da tabela produtos para compatibilidade com bancos existentes
 try {
   db.exec(`ALTER TABLE produtos ADD COLUMN descricao TEXT`)

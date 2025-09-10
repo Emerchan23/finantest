@@ -51,12 +51,19 @@ export async function GET(request: NextRequest) {
     }
 
     const usuarios = db.prepare(`
-      SELECT id, nome, email, role, ativo, ultimo_login, created_at, updated_at
+      SELECT id, nome, email, role, ativo, permissoes, ultimo_login, created_at, updated_at
       FROM usuarios 
+      WHERE ativo = 1
       ORDER BY created_at DESC
     `).all()
 
-    return NextResponse.json({ success: true, usuarios })
+    // Processar permissões para garantir que seja um array
+    const usuariosProcessados = usuarios.map((usuario: any) => ({
+      ...usuario,
+      permissoes: usuario.permissoes ? JSON.parse(usuario.permissoes) : []
+    }))
+
+    return NextResponse.json({ success: true, usuarios: usuariosProcessados })
 
   } catch (error) {
     console.error('Erro ao listar usuários:', error)

@@ -73,7 +73,7 @@ export function UsuariosManagement() {
 
   const carregarUsuarios = async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const response = await fetch('/api/usuarios', {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -82,13 +82,22 @@ export function UsuariosManagement() {
 
       if (response.ok) {
         const data = await response.json()
-        setUsuarios(data)
+        // A API retorna { success: true, usuarios: [...] }
+        const usuariosComPermissoes = Array.isArray(data.usuarios) 
+          ? data.usuarios.map((usuario: any) => ({
+              ...usuario,
+              permissoes: Array.isArray(usuario.permissoes) ? usuario.permissoes : []
+            }))
+          : []
+        setUsuarios(usuariosComPermissoes)
       } else {
         toast.error('Erro ao carregar usuários')
+        setUsuarios([])
       }
     } catch (error) {
       console.error('Erro ao carregar usuários:', error)
       toast.error('Erro ao carregar usuários')
+      setUsuarios([])
     } finally {
       setLoading(false)
     }
@@ -96,7 +105,7 @@ export function UsuariosManagement() {
 
   const salvarUsuario = async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const url = usuarioEditando ? `/api/usuarios/${usuarioEditando.id}` : '/api/usuarios'
       const method = usuarioEditando ? 'PUT' : 'POST'
 
@@ -128,7 +137,7 @@ export function UsuariosManagement() {
     if (!confirm('Tem certeza que deseja excluir este usuário?')) return
 
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const response = await fetch(`/api/usuarios/${id}`, {
         method: 'DELETE',
         headers: {
@@ -157,7 +166,7 @@ export function UsuariosManagement() {
       senha: '',
       role: usuario.role,
       ativo: usuario.ativo,
-      permissoes: usuario.permissoes
+      permissoes: Array.isArray(usuario.permissoes) ? usuario.permissoes : []
     })
     setDialogAberto(true)
   }
@@ -368,7 +377,7 @@ export function UsuariosManagement() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-4">
-            {usuarios.map((usuario) => (
+            {Array.isArray(usuarios) && usuarios.map((usuario) => (
               <Card key={usuario.id}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <div className="flex items-center space-x-4">
@@ -400,7 +409,7 @@ export function UsuariosManagement() {
                       {usuario.ultimo_login && (
                         <p>Último login: {formatarData(usuario.ultimo_login)}</p>
                       )}
-                      <p>Permissões: {usuario.permissoes.length} módulos</p>
+                      <p>Permissões: {(usuario.permissoes || []).length} módulos</p>
                     </div>
                     <div className="flex space-x-2">
                       <Button
@@ -428,7 +437,7 @@ export function UsuariosManagement() {
             ))}
           </div>
 
-          {usuarios.length === 0 && (
+          {(!Array.isArray(usuarios) || usuarios.length === 0) && (
             <div className="flex flex-col items-center justify-center py-12">
               <User className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">Nenhum usuário encontrado</h3>

@@ -583,6 +583,114 @@ function convertOklchInCSS(cssText: string): string {
     .replace(/var\(--[^)]+\)/g, 'rgb(37, 37, 37)') // Fallback para todas as variáveis CSS
 }
 
+// Função para gerar PDF como blob (para anexos de e-mail)
+export async function generatePDFBlob(html: string, title = "Documento"): Promise<Blob> {
+  try {
+    // Criar um elemento temporário para renderizar o HTML
+    const tempDiv = document.createElement('div')
+    tempDiv.style.position = 'absolute'
+    tempDiv.style.left = '-9999px'
+    tempDiv.style.top = '-9999px'
+    tempDiv.style.width = '210mm' // A4 width
+    tempDiv.style.backgroundColor = 'white'
+    
+    // Converter oklch para rgb nos estilos base
+    const convertedStyles = convertOklchInCSS(baseStyles().replace('<style>', '').replace('</style>', ''))
+    
+    // Adicionar estilos e conteúdo
+    tempDiv.innerHTML = `
+      <style>
+        ${convertedStyles}
+        /* Fallback colors for html2canvas */
+        :root {
+          --background: rgb(255, 255, 255);
+          --foreground: rgb(37, 37, 37);
+          --card: rgb(255, 255, 255);
+          --card-foreground: rgb(37, 37, 37);
+          --primary: rgb(52, 52, 52);
+          --primary-foreground: rgb(251, 251, 251);
+          --secondary: rgb(247, 247, 247);
+          --secondary-foreground: rgb(52, 52, 52);
+          --muted: rgb(247, 247, 247);
+          --muted-foreground: rgb(142, 142, 142);
+          --accent: rgb(247, 247, 247);
+          --accent-foreground: rgb(52, 52, 52);
+          --destructive: rgb(239, 68, 68);
+          --destructive-foreground: rgb(255, 255, 255);
+          --border: rgb(235, 235, 235);
+          --input: rgb(235, 235, 235);
+          --ring: rgb(180, 180, 180);
+        }
+        /* Forçar cores específicas para evitar problemas com html2canvas */
+        .text-green-600 { color: rgb(22, 163, 74) !important; }
+        .text-red-600 { color: rgb(220, 38, 38) !important; }
+        * { color: rgb(37, 37, 37) !important; }
+        .doc-header * { color: white !important; }
+        .amount { color: rgb(37, 37, 37) !important; }
+        strong { color: rgb(37, 37, 37) !important; }
+      </style>
+      <div class="container">${html}</div>
+    `
+    
+    document.body.appendChild(tempDiv)
+    
+    // Aguardar um momento para renderização
+    await new Promise(resolve => setTimeout(resolve, 100))
+    
+    // Capturar como canvas
+    const canvas = await html2canvas(tempDiv, {
+      scale: 2, // Melhor qualidade
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      width: 794 // A4 width in pixels at 96 DPI
+    })
+    
+    // Remover elemento temporário
+    document.body.removeChild(tempDiv)
+    
+    // Criar PDF
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    })
+    
+    const imgData = canvas.toDataURL('image/png')
+    const imgWidth = 210 // A4 width in mm
+    const pageHeight = 295 // A4 height in mm
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    
+    // Se o conteúdo cabe em uma página, adicionar apenas uma página
+    if (imgHeight <= pageHeight) {
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight)
+    } else {
+      // Se o conteúdo é maior que uma página, dividir em múltiplas páginas
+      let heightLeft = imgHeight
+      let position = 0
+      
+      // Adicionar primeira página
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight
+      
+      // Adicionar páginas adicionais apenas se necessário
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight
+        pdf.addPage()
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+        heightLeft -= pageHeight
+      }
+    }
+    
+    // Retornar como blob
+    return pdf.output('blob')
+    
+  } catch (error) {
+    console.error('Erro ao gerar PDF blob:', error)
+    throw new Error('Erro ao gerar PDF')
+  }
+}
+
 export async function downloadPDF(html: string, title = "Documento") {
   try {
     // Criar um elemento temporário para renderizar o HTML

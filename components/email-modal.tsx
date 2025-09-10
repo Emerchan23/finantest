@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { Mail, Send } from "lucide-react"
-import { makeOrcamentoHTML } from "@/lib/print"
+import { makeOrcamentoHTML, generatePDFBlob } from "@/lib/print"
+import { getConfig } from "@/lib/config"
 // Removed empresa imports - system simplified
 
 interface EmailModalProps {
@@ -19,10 +20,25 @@ interface EmailModalProps {
 export function EmailModal({ orcamento, onEmailSent }: EmailModalProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    to: "",
-    subject: `Orçamento #${orcamento.numero} - ${orcamento.cliente?.nome || 'Cliente'}`,
-    message: `Prezado(a) ${orcamento.cliente?.nome || 'Cliente'},\n\nSegue em anexo o orçamento solicitado.\n\nAtenciosamente,\nEquipe de Vendas`
+  const [formData, setFormData] = useState(() => {
+    const config = getConfig()
+    const defaultTemplate = config.emailTemplateOrcamento || `Prezado(a) {cliente},\n\nSegue em anexo o orçamento #{numero} solicitado.\n\nAtenciosamente,\nEquipe de Vendas`
+    
+    // Substituir variáveis no template
+    const message = defaultTemplate
+      .replace(/{cliente}/g, orcamento.cliente?.nome || 'Cliente')
+      .replace(/{numero}/g, orcamento.numero)
+      .replace(/{data}/g, new Date().toLocaleDateString('pt-BR'))
+      .replace(/{total}/g, new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+        orcamento.itens?.reduce((acc: number, it: any) => 
+          acc + (Number(it.quantidade) || 0) * (Number(it.valor_unitario) || 0) - (Number(it.desconto) || 0), 0) || 0
+      ))
+    
+    return {
+      to: "",
+      subject: `Orçamento #${orcamento.numero} - ${orcamento.cliente?.nome || 'Cliente'}`,
+      message: message
+    }
   })
   const { toast } = useToast()
 
@@ -67,7 +83,21 @@ export function EmailModal({ orcamento, onEmailSent }: EmailModalProps) {
         acc + (Number(it.quantidade) || 0) * (Number(it.valor_unitario) || 0) - (Number(it.desconto) || 0), 0) || 0 }
       const orcamentoHTML = await makeOrcamentoHTML(withTotal)
       
-      // Criar HTML completo do e-mail
+      // Gerar PDF como blob para anexo
+      console.log('📄 Gerando PDF do orçamento...')
+      const pdfBlob = await generatePDFBlob(orcamentoHTML, `Orcamento_${orcamento.numero}`)
+      
+      // Converter blob para base64 para envio
+      const pdfBase64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          const base64 = (reader.result as string).split(',')[1]
+          resolve(base64)
+        }
+        reader.readAsDataURL(pdfBlob)
+      })
+      
+      // Criar HTML simples do e-mail (sem o orçamento incorporado)
       const emailHTML = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
@@ -79,8 +109,9 @@ export function EmailModal({ orcamento, onEmailSent }: EmailModalProps) {
             <p style="color: #333; line-height: 1.6; white-space: pre-line;">${formData.message}</p>
           </div>
           
-          <div style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden;">
-            ${orcamentoHTML}
+          <div style="background-color: #e3f2fd; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
+            <h3 style="color: #1976d2; margin: 0 0 10px 0;">📎 Orçamento Anexado</h3>
+            <p style="color: #666; margin: 0;">O orçamento completo está anexado a este e-mail em formato PDF.</p>
           </div>
           
           <div style="text-align: center; margin-top: 20px; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
@@ -89,7 +120,16 @@ export function EmailModal({ orcamento, onEmailSent }: EmailModalProps) {
         </div>
       `
       
-      // Enviar e-mail via API
+      // Preparar anexo PDF
+      const attachments = [{
+        filename: `Orcamento_${orcamento.numero}.pdf`,
+        content: pdfBase64,
+        encoding: 'base64',
+        contentType: 'application/pdf'
+      }]
+      
+      // Enviar e-mail via API com anexo PDF
+      console.log('📧 Enviando e-mail com anexo PDF...')
       const response = await fetch('/api/email/send', {
         method: 'POST',
         headers: {
@@ -98,7 +138,8 @@ export function EmailModal({ orcamento, onEmailSent }: EmailModalProps) {
         body: JSON.stringify({
           to: formData.to,
           subject: formData.subject,
-          html: emailHTML
+          html: emailHTML,
+          attachments: attachments
         })
       })
       
